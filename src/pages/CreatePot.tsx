@@ -1,51 +1,71 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sprout, Users, Calendar, Wallet, Percent, Check, Copy } from 'lucide-react';
+import { ArrowLeft, Sprout, Users, Calendar, Wallet, Percent, Check, Copy, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { useFunds } from '@/hooks/useFunds';
 
 const CreatePot = () => {
   const navigate = useNavigate();
-  const { currentUser, createFund } = useAppStore();
+  const { user, loading: authLoading } = useAuth();
+  const { createFund } = useFunds();
   const [step, setStep] = useState(1);
   const [copied, setCopied] = useState(false);
-  const [createdFund, setCreatedFund] = useState<{ joinCode: string; id: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [createdFund, setCreatedFund] = useState<{ join_code: string; id: string } | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
-    totalAmount: 100000,
+    total_amount: 100000,
     duration: 10,
-    memberCount: 10,
-    adminCommission: 2,
+    member_count: 10,
+    admin_commission: 2,
   });
 
-  const monthlyContribution = formData.totalAmount / formData.duration;
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/login');
+    }
+  }, [user, authLoading, navigate]);
 
-  const handleCreate = () => {
-    if (!currentUser) return;
+  const monthly_contribution = formData.total_amount / formData.duration;
 
-    const fund = createFund({
+  const handleCreate = async () => {
+    setLoading(true);
+
+    const { fund, error } = await createFund({
       name: formData.name,
-      totalAmount: formData.totalAmount,
-      monthlyContribution,
+      total_amount: formData.total_amount,
+      monthly_contribution,
       duration: formData.duration,
-      memberCount: formData.memberCount,
-      adminId: currentUser.id,
-      adminCommission: formData.adminCommission,
+      member_count: formData.member_count,
+      admin_commission: formData.admin_commission,
     });
 
-    setCreatedFund({ joinCode: fund.joinCode, id: fund.id });
-    setStep(3);
+    setLoading(false);
+
+    if (fund && !error) {
+      setCreatedFund({ join_code: fund.join_code, id: fund.id });
+      setStep(3);
+    }
   };
 
   const copyCode = () => {
     if (createdFund) {
-      navigator.clipboard.writeText(createdFund.joinCode);
+      navigator.clipboard.writeText(createdFund.join_code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background px-6 py-8">
@@ -120,8 +140,8 @@ const CreatePot = () => {
                   </label>
                   <input
                     type="number"
-                    value={formData.totalAmount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, totalAmount: parseInt(e.target.value) || 0 }))}
+                    value={formData.total_amount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, total_amount: parseInt(e.target.value) || 0 }))}
                     className="w-full h-12 px-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                   />
                 </div>
@@ -149,8 +169,8 @@ const CreatePot = () => {
                   </label>
                   <input
                     type="number"
-                    value={formData.memberCount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, memberCount: parseInt(e.target.value) || 1 }))}
+                    value={formData.member_count}
+                    onChange={(e) => setFormData(prev => ({ ...prev, member_count: parseInt(e.target.value) || 1 }))}
                     className="w-full h-12 px-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                     min={2}
                     max={50}
@@ -163,8 +183,8 @@ const CreatePot = () => {
                   </label>
                   <input
                     type="number"
-                    value={formData.adminCommission}
-                    onChange={(e) => setFormData(prev => ({ ...prev, adminCommission: parseFloat(e.target.value) || 0 }))}
+                    value={formData.admin_commission}
+                    onChange={(e) => setFormData(prev => ({ ...prev, admin_commission: parseFloat(e.target.value) || 0 }))}
                     className="w-full h-12 px-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                     min={0}
                     max={10}
@@ -201,7 +221,7 @@ const CreatePot = () => {
               <div className="space-y-4">
                 <div className="flex justify-between py-3 border-b border-border">
                   <span className="text-muted-foreground">Total Pool</span>
-                  <span className="font-semibold">₹{formData.totalAmount.toLocaleString()}</span>
+                  <span className="font-semibold">₹{formData.total_amount.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-3 border-b border-border">
                   <span className="text-muted-foreground">Duration</span>
@@ -209,15 +229,15 @@ const CreatePot = () => {
                 </div>
                 <div className="flex justify-between py-3 border-b border-border">
                   <span className="text-muted-foreground">Members</span>
-                  <span className="font-semibold">{formData.memberCount} people</span>
+                  <span className="font-semibold">{formData.member_count} people</span>
                 </div>
                 <div className="flex justify-between py-3 border-b border-border">
                   <span className="text-muted-foreground">Monthly Contribution</span>
-                  <span className="font-semibold text-primary">₹{monthlyContribution.toLocaleString()}</span>
+                  <span className="font-semibold text-primary">₹{monthly_contribution.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-3">
                   <span className="text-muted-foreground">Your Commission</span>
-                  <span className="font-semibold">{formData.adminCommission}%</span>
+                  <span className="font-semibold">{formData.admin_commission}%</span>
                 </div>
               </div>
             </div>
@@ -226,8 +246,21 @@ const CreatePot = () => {
               <Button variant="outline" size="lg" className="flex-1" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button variant="hero" size="lg" className="flex-1" onClick={handleCreate}>
-                Create Pot
+              <Button 
+                variant="hero" 
+                size="lg" 
+                className="flex-1" 
+                onClick={handleCreate}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Pot'
+                )}
               </Button>
             </div>
           </motion.div>
@@ -256,7 +289,7 @@ const CreatePot = () => {
               <p className="text-sm text-muted-foreground mb-3">Join Code</p>
               <div className="flex items-center justify-center gap-3">
                 <span className="font-mono text-3xl font-bold tracking-widest text-gradient">
-                  {createdFund.joinCode}
+                  {createdFund.join_code}
                 </span>
                 <button
                   onClick={copyCode}
