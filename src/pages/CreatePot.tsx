@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sprout, Users, Calendar, Wallet, Percent, Check, Copy } from 'lucide-react';
+import { ArrowLeft, Sprout, Users, Calendar, Wallet, Percent, Check, Copy, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { useFunds } from '@/hooks/useFunds';
 
 const CreatePot = () => {
   const navigate = useNavigate();
-  const { currentUser, createFund } = useAppStore();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { createFund, isCreating } = useFunds();
   const [step, setStep] = useState(1);
   const [copied, setCopied] = useState(false);
-  const [createdFund, setCreatedFund] = useState<{ joinCode: string; id: string } | null>(null);
+  const [createdFund, setCreatedFund] = useState<{ join_code: string; id: string } | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -20,32 +22,47 @@ const CreatePot = () => {
     adminCommission: 2,
   });
 
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, authLoading, navigate]);
+
   const monthlyContribution = formData.totalAmount / formData.duration;
 
-  const handleCreate = () => {
-    if (!currentUser) return;
+  const handleCreate = async () => {
+    try {
+      const fund = await createFund({
+        name: formData.name,
+        total_amount: formData.totalAmount,
+        monthly_contribution: monthlyContribution,
+        duration: formData.duration,
+        member_count: formData.memberCount,
+        admin_commission: formData.adminCommission,
+      });
 
-    const fund = createFund({
-      name: formData.name,
-      totalAmount: formData.totalAmount,
-      monthlyContribution,
-      duration: formData.duration,
-      memberCount: formData.memberCount,
-      adminId: currentUser.id,
-      adminCommission: formData.adminCommission,
-    });
-
-    setCreatedFund({ joinCode: fund.joinCode, id: fund.id });
-    setStep(3);
+      setCreatedFund({ join_code: fund.join_code, id: fund.id });
+      setStep(3);
+    } catch (error) {
+      console.error('Error creating fund:', error);
+    }
   };
 
   const copyCode = () => {
     if (createdFund) {
-      navigator.clipboard.writeText(createdFund.joinCode);
+      navigator.clipboard.writeText(createdFund.join_code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background px-6 py-8">
@@ -226,8 +243,15 @@ const CreatePot = () => {
               <Button variant="outline" size="lg" className="flex-1" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button variant="hero" size="lg" className="flex-1" onClick={handleCreate}>
-                Create Pot
+              <Button variant="hero" size="lg" className="flex-1" onClick={handleCreate} disabled={isCreating}>
+                {isCreating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Pot'
+                )}
               </Button>
             </div>
           </motion.div>
@@ -256,7 +280,7 @@ const CreatePot = () => {
               <p className="text-sm text-muted-foreground mb-3">Join Code</p>
               <div className="flex items-center justify-center gap-3">
                 <span className="font-mono text-3xl font-bold tracking-widest text-gradient">
-                  {createdFund.joinCode}
+                  {createdFund.join_code}
                 </span>
                 <button
                   onClick={copyCode}

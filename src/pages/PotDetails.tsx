@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Users, Wallet, Calendar, Copy, Check, 
-  Play, Upload, Trophy, Clock
+  Play, Upload, Trophy, Clock, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { useFundDetails } from '@/hooks/useFunds';
 import PotStatusCard from '@/components/PotStatusCard';
 import MemberCard from '@/components/MemberCard';
 import PaymentCard from '@/components/PaymentCard';
@@ -18,16 +19,40 @@ type TabType = 'overview' | 'members' | 'payments' | 'spin';
 const PotDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { currentUser, getFund, verifyMember, payments, approvePayment, recordSpin, submitPayment } = useAppStore();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
+  const { 
+    fund, 
+    members, 
+    payments, 
+    isAdmin, 
+    loading,
+    verifyMember,
+    submitPayment,
+    approvePayment,
+    recordSpin
+  } = useFundDetails(id || '');
+  
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [copied, setCopied] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentNote, setPaymentNote] = useState('');
 
-  const fund = getFund(id || '');
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, authLoading, navigate]);
 
-  if (!fund || !currentUser) {
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!fund || !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Pot not found</p>
@@ -35,17 +60,15 @@ const PotDetails = () => {
     );
   }
 
-  const isAdmin = fund.adminId === currentUser.id;
-  const fundPayments = payments.filter(p => p.fundId === fund.id);
-  const currentMonthPayments = fundPayments.filter(p => p.month === fund.currentMonth);
+  const currentMonthPayments = payments.filter(p => p.month === fund.current_month);
   const approvedAmount = currentMonthPayments
     .filter(p => p.status === 'approved')
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const eligibleForSpin = fund.members.filter(m => m.isVerified && !m.hasWon);
+  const eligibleForSpin = members.filter(m => m.is_verified && !m.has_won);
 
   const copyCode = () => {
-    navigator.clipboard.writeText(fund.joinCode);
+    navigator.clipboard.writeText(fund.join_code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -56,24 +79,20 @@ const PotDetails = () => {
     }
   };
 
-  const handleSpinComplete = (winner: { id: string; name: string }) => {
+  const handleSpinComplete = async (winner: { id: string; name: string }) => {
     setIsSpinning(false);
-    recordSpin({
-      fundId: fund.id,
-      month: fund.currentMonth,
-      winnerId: winner.id,
-      winnerName: winner.name,
-      amount: fund.monthlyContribution * (1 - fund.adminCommission / 100),
+    await recordSpin({
+      month: fund.current_month,
+      winner_id: winner.id,
+      amount: fund.monthly_contribution * (1 - fund.admin_commission / 100),
     });
   };
 
-  const handlePaymentSubmit = () => {
-    submitPayment({
-      memberId: currentUser.id,
-      fundId: fund.id,
-      month: fund.currentMonth,
-      amount: fund.monthlyContribution / fund.memberCount,
-      proofText: paymentNote,
+  const handlePaymentSubmit = async () => {
+    await submitPayment({
+      month: fund.current_month,
+      amount: fund.monthly_contribution / fund.member_count,
+      proof_text: paymentNote,
     });
     setShowPaymentForm(false);
     setPaymentNote('');
@@ -85,6 +104,23 @@ const PotDetails = () => {
     { id: 'payments', label: 'Payments', icon: Calendar },
     { id: 'spin', label: 'Spin', icon: Trophy },
   ];
+
+  // Convert fund to the format expected by PotStatusCard
+  const fundForStatus = {
+    id: fund.id,
+    name: fund.name,
+    totalAmount: fund.total_amount,
+    monthlyContribution: fund.monthly_contribution,
+    duration: fund.duration,
+    memberCount: fund.member_count,
+    adminId: fund.admin_id,
+    joinCode: fund.join_code,
+    adminCommission: fund.admin_commission,
+    currentMonth: fund.current_month,
+    status: fund.status as 'active' | 'completed' | 'paused',
+    members: [],
+    createdAt: new Date(fund.created_at),
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -106,7 +142,7 @@ const PotDetails = () => {
               onClick={copyCode}
               className="flex items-center gap-1 text-xs font-mono bg-secondary px-3 py-1.5 rounded-lg hover:bg-secondary/80"
             >
-              {fund.joinCode}
+              {fund.join_code}
               {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
             </button>
           )}
@@ -145,7 +181,7 @@ const PotDetails = () => {
                 exit={{ opacity: 0, y: -20 }}
                 className="grid lg:grid-cols-2 gap-6"
               >
-                <PotStatusCard fund={fund} collectedAmount={approvedAmount} />
+                <PotStatusCard fund={fundForStatus} collectedAmount={approvedAmount} />
                 
                 <div className="glass-card p-6">
                   <h3 className="font-display text-lg font-semibold mb-4">Quick Actions</h3>
@@ -196,11 +232,11 @@ const PotDetails = () => {
               >
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="font-display text-xl font-semibold">
-                    Members ({fund.members.length}/{fund.memberCount})
+                    Members ({members.length}/{fund.member_count})
                   </h2>
                 </div>
 
-                {fund.members.length === 0 ? (
+                {members.length === 0 ? (
                   <div className="glass-card p-12 text-center">
                     <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="font-semibold mb-2">No members yet</h3>
@@ -210,12 +246,28 @@ const PotDetails = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {fund.members.map((member) => (
+                    {members.map((member) => (
                       <MemberCard
-                        key={member.userId}
-                        member={member}
+                        key={member.id}
+                        member={{
+                          userId: member.user_id,
+                          user: {
+                            id: member.user_id,
+                            name: member.profile?.full_name || 'Unknown',
+                            email: '',
+                            phone: '',
+                            isVerified: member.is_verified,
+                            role: 'member',
+                            createdAt: new Date(),
+                          },
+                          joinedAt: new Date(member.joined_at),
+                          isVerified: member.is_verified,
+                          hasWon: member.has_won,
+                          wonMonth: member.won_month || undefined,
+                          payments: [],
+                        }}
                         isAdmin={isAdmin}
-                        onVerify={(userId) => verifyMember(fund.id, userId)}
+                        onVerify={() => verifyMember(member.id)}
                       />
                     ))}
                   </div>
@@ -233,7 +285,7 @@ const PotDetails = () => {
               >
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="font-display text-xl font-semibold">
-                    Month {fund.currentMonth} Payments
+                    Month {fund.current_month} Payments
                   </h2>
                   {!isAdmin && (
                     <Button onClick={() => setShowPaymentForm(true)}>
@@ -243,7 +295,7 @@ const PotDetails = () => {
                   )}
                 </div>
 
-                {fundPayments.length === 0 ? (
+                {payments.length === 0 ? (
                   <div className="glass-card p-12 text-center">
                     <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="font-semibold mb-2">No payments yet</h3>
@@ -253,15 +305,26 @@ const PotDetails = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {fundPayments.map((payment) => {
-                      const member = fund.members.find(m => m.userId === payment.memberId);
+                    {payments.map((payment) => {
+                      const member = members.find(m => m.user_id === payment.member_id);
                       return (
                         <PaymentCard
                           key={payment.id}
-                          payment={payment}
-                          memberName={member?.user.name || 'Unknown'}
+                          payment={{
+                            id: payment.id,
+                            memberId: payment.member_id,
+                            fundId: payment.fund_id,
+                            month: payment.month,
+                            amount: payment.amount,
+                            proofImage: payment.proof_image || undefined,
+                            proofText: payment.proof_text || undefined,
+                            status: payment.status as 'pending' | 'approved' | 'rejected',
+                            submittedAt: new Date(payment.submitted_at),
+                            approvedAt: payment.approved_at ? new Date(payment.approved_at) : undefined,
+                          }}
+                          memberName={member?.profile?.full_name || 'Unknown'}
                           isAdmin={isAdmin}
-                          onApprove={approvePayment}
+                          onApprove={() => approvePayment(payment.id)}
                         />
                       );
                     })}
@@ -280,7 +343,7 @@ const PotDetails = () => {
                 className="text-center"
               >
                 <h2 className="font-display text-2xl font-bold mb-2">
-                  Month {fund.currentMonth} Auction
+                  Month {fund.current_month} Auction
                 </h2>
                 <p className="text-muted-foreground mb-8">
                   {eligibleForSpin.length} members eligible to win
@@ -297,7 +360,10 @@ const PotDetails = () => {
                 ) : (
                   <>
                     <SpinningWheel
-                      members={eligibleForSpin.map(m => ({ id: m.userId, name: m.user.name }))}
+                      members={eligibleForSpin.map(m => ({ 
+                        id: m.user_id, 
+                        name: m.profile?.full_name || 'Unknown' 
+                      }))}
                       onComplete={handleSpinComplete}
                       isSpinning={isSpinning}
                     />
@@ -338,7 +404,7 @@ const PotDetails = () => {
             >
               <h3 className="font-display text-xl font-bold mb-4">Submit Payment</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                Pay ₹{(fund.monthlyContribution / fund.memberCount).toLocaleString()} to the admin, 
+                Pay ₹{(fund.monthly_contribution / fund.member_count).toLocaleString()} to the admin, 
                 then add a note below.
               </p>
 
