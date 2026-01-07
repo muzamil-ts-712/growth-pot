@@ -1,28 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
   Sprout, Plus, Users, TrendingUp, Copy, Check, 
-  LogOut, Wallet, Calendar
+  LogOut, Wallet, Calendar, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { useFunds } from '@/hooks/useFunds';
 import MiaAssistant from '@/components/MiaAssistant';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, funds, setCurrentUser } = useAppStore();
+  const { user, profile, signOut, isAuthenticated, loading: authLoading } = useAuth();
+  const { funds, fundsLoading } = useFunds();
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  if (!currentUser) {
-    navigate('/login');
-    return null;
-  }
-
-  const userFunds = funds.filter(f => 
-    f.adminId === currentUser.id || 
-    f.members.some(m => m.userId === currentUser.id)
-  );
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, authLoading, navigate]);
 
   const copyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -30,10 +28,22 @@ const Dashboard = () => {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleLogout = async () => {
+    await signOut();
     navigate('/');
   };
+
+  if (authLoading || fundsLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
+  const displayName = profile?.full_name || user.email?.split('@')[0] || 'User';
 
   return (
     <div className="min-h-screen bg-background">
@@ -49,11 +59,11 @@ const Dashboard = () => {
 
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="font-medium">{currentUser.name}</p>
-              <p className="text-xs text-muted-foreground capitalize">{currentUser.role}</p>
+              <p className="font-medium">{displayName}</p>
+              <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-bold text-primary">
-              {currentUser.name.charAt(0).toUpperCase()}
+              {displayName.charAt(0).toUpperCase()}
             </div>
             <Button variant="ghost" size="icon" onClick={handleLogout}>
               <LogOut className="w-5 h-5" />
@@ -71,11 +81,11 @@ const Dashboard = () => {
             className="mb-8"
           >
             <h1 className="font-display text-3xl font-bold mb-2">
-              Welcome back, {currentUser.name.split(' ')[0]}! 👋
+              Welcome back, {displayName.split(' ')[0]}! 👋
             </h1>
             <p className="text-muted-foreground">
-              {userFunds.length > 0 
-                ? `You're part of ${userFunds.length} pot${userFunds.length > 1 ? 's' : ''}`
+              {funds.length > 0 
+                ? `You're part of ${funds.length} pot${funds.length > 1 ? 's' : ''}`
                 : 'Get started by creating or joining a pot'
               }
             </p>
@@ -91,26 +101,26 @@ const Dashboard = () => {
             <div className="glass-card p-4">
               <Wallet className="w-5 h-5 text-primary mb-2" />
               <p className="text-2xl font-bold">
-                ₹{userFunds.reduce((sum, f) => sum + f.monthlyContribution, 0).toLocaleString()}
+                ₹{funds.reduce((sum, f) => sum + f.monthly_contribution, 0).toLocaleString()}
               </p>
               <p className="text-xs text-muted-foreground">Monthly Contributions</p>
             </div>
             <div className="glass-card p-4">
               <Users className="w-5 h-5 text-primary mb-2" />
-              <p className="text-2xl font-bold">{userFunds.length}</p>
+              <p className="text-2xl font-bold">{funds.length}</p>
               <p className="text-xs text-muted-foreground">Active Pots</p>
             </div>
             <div className="glass-card p-4">
               <Calendar className="w-5 h-5 text-primary mb-2" />
               <p className="text-2xl font-bold">
-                {userFunds.filter(f => f.status === 'active').length}
+                {funds.filter(f => f.status === 'active').length}
               </p>
               <p className="text-xs text-muted-foreground">Ongoing</p>
             </div>
             <div className="glass-card p-4">
               <TrendingUp className="w-5 h-5 text-primary mb-2" />
               <p className="text-2xl font-bold">
-                ₹{userFunds.reduce((sum, f) => sum + f.totalAmount, 0).toLocaleString()}
+                ₹{funds.reduce((sum, f) => sum + f.total_amount, 0).toLocaleString()}
               </p>
               <p className="text-xs text-muted-foreground">Total Pool</p>
             </div>
@@ -123,12 +133,10 @@ const Dashboard = () => {
             transition={{ delay: 0.2 }}
             className="flex flex-wrap gap-3 mb-8"
           >
-            {currentUser.role === 'admin' && (
-              <Button variant="hero" onClick={() => navigate('/create-pot')}>
-                <Plus className="w-4 h-4" />
-                Create New Pot
-              </Button>
-            )}
+            <Button variant="hero" onClick={() => navigate('/create-pot')}>
+              <Plus className="w-4 h-4" />
+              Create New Pot
+            </Button>
             <Button variant="outline" onClick={() => navigate('/join')}>
               <Users className="w-4 h-4" />
               Join a Pot
@@ -143,7 +151,7 @@ const Dashboard = () => {
           >
             <h2 className="font-display text-xl font-semibold mb-4">Your Pots</h2>
             
-            {userFunds.length === 0 ? (
+            {funds.length === 0 ? (
               <div className="glass-card p-12 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-4">
                   <Sprout className="w-8 h-8 text-muted-foreground" />
@@ -153,12 +161,10 @@ const Dashboard = () => {
                   Create your first pot or join an existing one to get started
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
-                  {currentUser.role === 'admin' && (
-                    <Button variant="hero" onClick={() => navigate('/create-pot')}>
-                      <Plus className="w-4 h-4" />
-                      Create Pot
-                    </Button>
-                  )}
+                  <Button variant="hero" onClick={() => navigate('/create-pot')}>
+                    <Plus className="w-4 h-4" />
+                    Create Pot
+                  </Button>
                   <Button variant="outline" onClick={() => navigate('/join')}>
                     Join Pot
                   </Button>
@@ -166,10 +172,9 @@ const Dashboard = () => {
               </div>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {userFunds.map((fund, index) => {
-                  const isAdmin = fund.adminId === currentUser.id;
-                  const verifiedMembers = fund.members.filter(m => m.isVerified).length;
-                  const progress = (fund.currentMonth / fund.duration) * 100;
+                {funds.map((fund, index) => {
+                  const isAdmin = fund.admin_id === user.id;
+                  const progress = (fund.current_month / fund.duration) * 100;
 
                   return (
                     <motion.div
@@ -184,7 +189,7 @@ const Dashboard = () => {
                         <div>
                           <h3 className="font-display font-semibold text-lg">{fund.name}</h3>
                           <p className="text-xs text-muted-foreground">
-                            {isAdmin ? 'Admin' : 'Member'} • Month {fund.currentMonth}/{fund.duration}
+                            {isAdmin ? 'Admin' : 'Member'} • Month {fund.current_month}/{fund.duration}
                           </p>
                         </div>
                         <div className={`px-2 py-1 rounded-full text-xs ${
@@ -209,10 +214,10 @@ const Dashboard = () => {
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-1 text-muted-foreground">
                           <Users className="w-4 h-4" />
-                          <span>{verifiedMembers}/{fund.memberCount}</span>
+                          <span>{fund.member_count}</span>
                         </div>
                         <span className="font-semibold text-primary">
-                          ₹{fund.monthlyContribution.toLocaleString()}/mo
+                          ₹{fund.monthly_contribution.toLocaleString()}/mo
                         </span>
                       </div>
 
@@ -222,12 +227,12 @@ const Dashboard = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              copyCode(fund.joinCode);
+                              copyCode(fund.join_code);
                             }}
                             className="flex items-center gap-1 text-xs font-mono bg-secondary px-2 py-1 rounded hover:bg-secondary/80"
                           >
-                            {fund.joinCode}
-                            {copiedCode === fund.joinCode ? (
+                            {fund.join_code}
+                            {copiedCode === fund.join_code ? (
                               <Check className="w-3 h-3 text-success" />
                             ) : (
                               <Copy className="w-3 h-3" />

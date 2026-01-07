@@ -1,41 +1,106 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Sprout, Mail, Lock, User, Phone, ArrowLeft, Shield } from 'lucide-react';
+import { Sprout, Mail, Lock, User, Phone, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { z } from 'zod';
+
+const signupSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  email: z.string().email('Invalid email address'),
+  phone: z.string().optional(),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
 
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSignup = location.pathname === '/signup';
-  const { setCurrentUser } = useAppStore();
+  const { signUp, signIn, isAuthenticated, loading: authLoading } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     password: '',
-    role: 'member' as 'admin' | 'member',
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [generalError, setGeneralError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, authLoading, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Create mock user
-    const user = {
-      id: Math.random().toString(36).substring(2, 11),
-      name: formData.name || 'Demo User',
-      email: formData.email,
-      phone: formData.phone,
-      isVerified: true,
-      role: formData.role,
-      createdAt: new Date(),
-    };
+    setErrors({});
+    setGeneralError('');
 
-    setCurrentUser(user);
-    navigate('/dashboard');
+    // Validate
+    const schema = isSignup ? signupSchema : loginSchema;
+    const result = schema.safeParse(formData);
+    
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach(err => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (isSignup) {
+        const { error } = await signUp(formData.email, formData.password, formData.name, formData.phone || undefined);
+        if (error) {
+          if (error.message.includes('already registered')) {
+            setGeneralError('This email is already registered. Please log in instead.');
+          } else {
+            setGeneralError(error.message);
+          }
+          return;
+        }
+      } else {
+        const { error } = await signIn(formData.email, formData.password);
+        if (error) {
+          if (error.message.includes('Invalid login')) {
+            setGeneralError('Invalid email or password. Please try again.');
+          } else {
+            setGeneralError(error.message);
+          }
+          return;
+        }
+      }
+      
+      navigate('/dashboard');
+    } catch (err) {
+      setGeneralError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -70,6 +135,17 @@ const Auth = () => {
               </div>
             </div>
 
+            {generalError && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 text-destructive text-sm"
+              >
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {generalError}
+              </motion.div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               {isSignup && (
                 <motion.div
@@ -83,11 +159,11 @@ const Auth = () => {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                      className={`w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border ${errors.name ? 'border-destructive' : 'border-border'} focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all`}
                       placeholder="Enter your full name"
-                      required={isSignup}
                     />
                   </div>
+                  {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
                 </motion.div>
               )}
 
@@ -99,11 +175,11 @@ const Auth = () => {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                    className={`w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border ${errors.email ? 'border-destructive' : 'border-border'} focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all`}
                     placeholder="you@example.com"
-                    required
                   />
                 </div>
+                {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
               </div>
 
               {isSignup && (
@@ -111,7 +187,7 @@ const Auth = () => {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                 >
-                  <label className="block text-sm font-medium mb-2">Phone Number</label>
+                  <label className="block text-sm font-medium mb-2">Phone Number (Optional)</label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <input
@@ -133,49 +209,22 @@ const Auth = () => {
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                    className={`w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border ${errors.password ? 'border-destructive' : 'border-border'} focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all`}
                     placeholder="••••••••"
-                    required
                   />
                 </div>
+                {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
               </div>
 
-              {isSignup && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">I want to</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, role: 'admin' }))}
-                      className={`p-4 rounded-lg border text-left transition-all ${
-                        formData.role === 'admin'
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border bg-secondary hover:border-primary/50'
-                      }`}
-                    >
-                      <Shield className={`w-5 h-5 mb-2 ${formData.role === 'admin' ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <p className="font-medium text-sm">Create Pots</p>
-                      <p className="text-xs text-muted-foreground">As an Admin</p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, role: 'member' }))}
-                      className={`p-4 rounded-lg border text-left transition-all ${
-                        formData.role === 'member'
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border bg-secondary hover:border-primary/50'
-                      }`}
-                    >
-                      <User className={`w-5 h-5 mb-2 ${formData.role === 'member' ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <p className="font-medium text-sm">Join Pots</p>
-                      <p className="text-xs text-muted-foreground">As a Member</p>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <Button type="submit" variant="hero" size="lg" className="w-full mt-6">
-                {isSignup ? 'Create Account' : 'Log In'}
+              <Button type="submit" variant="hero" size="lg" className="w-full mt-6" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {isSignup ? 'Creating Account...' : 'Logging In...'}
+                  </>
+                ) : (
+                  isSignup ? 'Create Account' : 'Log In'
+                )}
               </Button>
             </form>
 
