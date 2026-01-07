@@ -1,94 +1,65 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Sprout, Mail, Lock, User, Phone, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { Sprout, Mail, Lock, User, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { z } from 'zod';
-
-const signupSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  email: z.string().email('Invalid email address'),
-  phone: z.string().optional(),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-});
-
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
 
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSignup = location.pathname === '/signup';
-  const { signUp, signIn, isAuthenticated, loading: authLoading } = useAuth();
+  const { signIn, signUp, user, loading: authLoading } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    phone: '',
     password: '',
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [generalError, setGeneralError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  // Redirect if already authenticated
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    if (user && !authLoading) {
       navigate('/dashboard');
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [user, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({});
-    setGeneralError('');
-
-    // Validate
-    const schema = isSignup ? signupSchema : loginSchema;
-    const result = schema.safeParse(formData);
-    
-    if (!result.success) {
-      const fieldErrors: Record<string, string> = {};
-      result.error.errors.forEach(err => {
-        if (err.path[0]) {
-          fieldErrors[err.path[0] as string] = err.message;
-        }
-      });
-      setErrors(fieldErrors);
-      return;
-    }
-
     setLoading(true);
+    setError(null);
 
     try {
       if (isSignup) {
-        const { error } = await signUp(formData.email, formData.password, formData.name, formData.phone || undefined);
+        if (!formData.name.trim()) {
+          setError('Please enter your full name');
+          setLoading(false);
+          return;
+        }
+        
+        const { error } = await signUp(formData.email, formData.password, formData.name);
+        
         if (error) {
           if (error.message.includes('already registered')) {
-            setGeneralError('This email is already registered. Please log in instead.');
+            setError('This email is already registered. Please log in instead.');
           } else {
-            setGeneralError(error.message);
+            setError(error.message);
           }
-          return;
         }
       } else {
         const { error } = await signIn(formData.email, formData.password);
+        
         if (error) {
-          if (error.message.includes('Invalid login')) {
-            setGeneralError('Invalid email or password. Please try again.');
+          if (error.message.includes('Invalid login credentials')) {
+            setError('Invalid email or password. Please try again.');
           } else {
-            setGeneralError(error.message);
+            setError(error.message);
           }
-          return;
         }
       }
-      
-      navigate('/dashboard');
     } catch (err) {
-      setGeneralError('An unexpected error occurred. Please try again.');
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -135,14 +106,14 @@ const Auth = () => {
               </div>
             </div>
 
-            {generalError && (
+            {error && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 text-destructive text-sm"
               >
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {generalError}
+                {error}
               </motion.div>
             )}
 
@@ -159,11 +130,11 @@ const Auth = () => {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                      className={`w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border ${errors.name ? 'border-destructive' : 'border-border'} focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all`}
+                      className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                       placeholder="Enter your full name"
+                      required={isSignup}
                     />
                   </div>
-                  {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
                 </motion.div>
               )}
 
@@ -175,31 +146,12 @@ const Auth = () => {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className={`w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border ${errors.email ? 'border-destructive' : 'border-border'} focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all`}
+                    className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                     placeholder="you@example.com"
+                    required
                   />
                 </div>
-                {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
               </div>
-
-              {isSignup && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                >
-                  <label className="block text-sm font-medium mb-2">Phone Number (Optional)</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                      className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                      placeholder="+91 98765 43210"
-                    />
-                  </div>
-                </motion.div>
-              )}
 
               <div>
                 <label className="block text-sm font-medium mb-2">Password</label>
@@ -209,14 +161,26 @@ const Auth = () => {
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className={`w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border ${errors.password ? 'border-destructive' : 'border-border'} focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all`}
+                    className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                     placeholder="••••••••"
+                    required
+                    minLength={6}
                   />
                 </div>
-                {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
+                {isSignup && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Must be at least 6 characters
+                  </p>
+                )}
               </div>
 
-              <Button type="submit" variant="hero" size="lg" className="w-full mt-6" disabled={loading}>
+              <Button 
+                type="submit" 
+                variant="hero" 
+                size="lg" 
+                className="w-full mt-6"
+                disabled={loading}
+              >
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />

@@ -8,18 +8,19 @@ import { useFunds } from '@/hooks/useFunds';
 
 const JoinPot = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, loading: authLoading } = useAuth();
-  const { joinFund, isJoining } = useFunds();
+  const { user, loading: authLoading } = useAuth();
+  const { getFundByCode, joinFund } = useFunds();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [joinedFundId, setJoinedFundId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (!authLoading && !user) {
       navigate('/login');
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [user, authLoading, navigate]);
 
   const handleJoin = async () => {
     if (code.length !== 6) {
@@ -27,14 +28,32 @@ const JoinPot = () => {
       return;
     }
 
-    try {
-      const fund = await joinFund(code.toUpperCase());
-      setSuccess(true);
-      setJoinedFundId(fund.id);
-      setError('');
-    } catch (err) {
+    setLoading(true);
+    setError('');
+
+    const { data: fund, error: fetchError } = await getFundByCode(code);
+
+    if (fetchError || !fund) {
       setError('Invalid code. Please check and try again.');
+      setLoading(false);
+      return;
     }
+
+    const { error: joinError } = await joinFund(fund.id);
+
+    setLoading(false);
+
+    if (joinError) {
+      if (joinError.message.includes('duplicate')) {
+        setError('You have already joined this pot.');
+      } else {
+        setError(joinError.message);
+      }
+      return;
+    }
+
+    setSuccess(true);
+    setJoinedFundId(fund.id);
   };
 
   const handleCodeChange = (value: string) => {
@@ -155,9 +174,9 @@ const JoinPot = () => {
             size="lg" 
             className="w-full"
             onClick={handleJoin}
-            disabled={code.length !== 6 || isJoining}
+            disabled={code.length !== 6 || loading}
           >
-            {isJoining ? (
+            {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Joining...

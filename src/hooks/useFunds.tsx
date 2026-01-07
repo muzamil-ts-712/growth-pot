@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -21,12 +21,13 @@ export interface FundMember {
   id: string;
   fund_id: string;
   user_id: string;
-  joined_at: string;
   is_verified: boolean;
   has_won: boolean;
   won_month: number | null;
+  joined_at: string;
   profile?: {
     full_name: string;
+    phone: string | null;
     avatar_url: string | null;
   };
 }
@@ -64,323 +65,352 @@ const generateJoinCode = () => {
 
 export const useFunds = () => {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
+  const [funds, setFunds] = useState<Fund[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch user's funds (as admin or member)
-  const { data: funds = [], isLoading: fundsLoading } = useQuery({
-    queryKey: ['funds', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      
-      // Get funds where user is admin
-      const { data: adminFunds, error: adminError } = await supabase
+  const fetchFunds = async () => {
+    if (!user) {
+      setFunds([]);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch funds where user is admin
+    const { data: adminFunds } = await supabase
+      .from('funds')
+      .select('*')
+      .eq('admin_id', user.id);
+
+    // Fetch funds where user is a member
+    const { data: memberFundIds } = await supabase
+      .from('fund_members')
+      .select('fund_id')
+      .eq('user_id', user.id);
+
+    let memberFunds: Fund[] = [];
+    if (memberFundIds && memberFundIds.length > 0) {
+      const fundIds = memberFundIds.map(m => m.fund_id);
+      const { data } = await supabase
         .from('funds')
         .select('*')
-        .eq('admin_id', user.id);
-      
-      if (adminError) throw adminError;
+        .in('id', fundIds);
+      memberFunds = data || [];
+    }
 
-      // Get funds where user is member
-      const { data: memberFunds, error: memberError } = await supabase
-        .from('fund_members')
-        .select('fund_id')
-        .eq('user_id', user.id);
+    // Combine and deduplicate
+    const allFunds = [...(adminFunds || []), ...memberFunds];
+    const uniqueFunds = allFunds.filter((fund, index, self) =>
+      index === self.findIndex(f => f.id === fund.id)
+    );
 
-      if (memberError) throw memberError;
+    setFunds(uniqueFunds);
+    setLoading(false);
+  };
 
-      const memberFundIds = memberFunds.map(m => m.fund_id);
-      
-      if (memberFundIds.length > 0) {
-        const { data: joinedFunds, error: joinedError } = await supabase
-          .from('funds')
-          .select('*')
-          .in('id', memberFundIds);
+  useEffect(() => {
+    fetchFunds();
+  }, [user]);
 
-        if (joinedError) throw joinedError;
+  const createFund = async (data: {
+    name: string;
+    total_amount: number;
+    monthly_contribution: number;
+    duration: number;
+    member_count: number;
+    admin_commission: number;
+  }) => {
+    if (!user) return { error: new Error('Not authenticated'), fund: null };
 
-        // Combine and dedupe
-        const allFunds = [...(adminFunds || [])];
-        joinedFunds?.forEach(jf => {
-          if (!allFunds.find(af => af.id === jf.id)) {
-            allFunds.push(jf);
-          }
-        });
-        return allFunds as Fund[];
-      }
+    const joinCode = generateJoinCode();
 
-      return adminFunds as Fund[];
-    },
-    enabled: !!user,
-  });
+    const { data: fund, error } = await supabase
+      .from('funds')
+      .insert({
+        ...data,
+        admin_id: user.id,
+        join_code: joinCode,
+      })
+      .select()
+      .single();
 
-  // Create fund
-  const createFundMutation = useMutation({
-    mutationFn: async (fundData: {
-      name: string;
-      total_amount: number;
-      monthly_contribution: number;
-      duration: number;
-      member_count: number;
-      admin_commission: number;
-    }) => {
-      if (!user) throw new Error('Not authenticated');
+    if (!error && fund) {
+      await fetchFunds();
+    }
 
-      const { data, error } = await supabase
-        .from('funds')
-        .insert({
-          ...fundData,
-          admin_id: user.id,
-          join_code: generateJoinCode(),
-        })
-        .select()
-        .single();
+    return { error, fund };
+  };
 
-      if (error) throw error;
-      return data as Fund;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['funds'] });
-    },
-  });
+  const getFund = async (id: string) => {
+    const { data, error } = await supabase
+      .from('funds')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
 
-  // Join fund by code
-  const joinFundMutation = useMutation({
-    mutationFn: async (joinCode: string) => {
-      if (!user) throw new Error('Not authenticated');
+    return { data, error };
+  };
 
-      // Find fund by code
-      const { data: fund, error: findError } = await supabase
-        .from('funds')
-        .select('*')
-        .eq('join_code', joinCode.toUpperCase())
-        .single();
+  const getFundByCode = async (code: string) => {
+    const { data, error } = await supabase
+      .from('funds')
+      .select('*')
+      .eq('join_code', code.toUpperCase())
+      .maybeSingle();
 
-      if (findError || !fund) throw new Error('Invalid join code');
+    return { data, error };
+  };
 
-      // Check if already a member
-      const { data: existing } = await supabase
-        .from('fund_members')
-        .select('id')
-        .eq('fund_id', fund.id)
-        .eq('user_id', user.id)
-        .single();
+  const joinFund = async (fundId: string) => {
+    if (!user) return { error: new Error('Not authenticated') };
 
-      if (existing) return fund as Fund;
+    const { error } = await supabase
+      .from('fund_members')
+      .insert({
+        fund_id: fundId,
+        user_id: user.id,
+        is_verified: false,
+      });
 
-      // Join the fund
-      const { error: joinError } = await supabase
-        .from('fund_members')
-        .insert({
-          fund_id: fund.id,
-          user_id: user.id,
-        });
+    if (!error) {
+      await fetchFunds();
+    }
 
-      if (joinError) throw joinError;
-      return fund as Fund;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['funds'] });
-    },
-  });
+    return { error };
+  };
+
+  const updateFund = async (id: string, data: Partial<Fund>) => {
+    const { error } = await supabase
+      .from('funds')
+      .update(data)
+      .eq('id', id);
+
+    if (!error) {
+      await fetchFunds();
+    }
+
+    return { error };
+  };
 
   return {
     funds,
-    fundsLoading,
-    createFund: createFundMutation.mutateAsync,
-    joinFund: joinFundMutation.mutateAsync,
-    isCreating: createFundMutation.isPending,
-    isJoining: joinFundMutation.isPending,
+    loading,
+    createFund,
+    getFund,
+    getFundByCode,
+    joinFund,
+    updateFund,
+    refetch: fetchFunds,
   };
 };
 
-export const useFundDetails = (fundId: string) => {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
+export const useFundMembers = (fundId: string | undefined) => {
+  const [members, setMembers] = useState<FundMember[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch fund details
-  const { data: fund, isLoading: fundLoading } = useQuery({
-    queryKey: ['fund', fundId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('funds')
-        .select('*')
-        .eq('id', fundId)
-        .single();
+  const fetchMembers = async () => {
+    if (!fundId) {
+      setMembers([]);
+      setLoading(false);
+      return;
+    }
 
-      if (error) throw error;
-      return data as Fund;
-    },
-    enabled: !!fundId,
-  });
+    const { data, error } = await supabase
+      .from('fund_members')
+      .select(`
+        *,
+        profile:profiles!fund_members_user_id_fkey(full_name, phone, avatar_url)
+      `)
+      .eq('fund_id', fundId);
 
-  // Fetch members with profiles
-  const { data: members = [], isLoading: membersLoading } = useQuery({
-    queryKey: ['fund-members', fundId],
-    queryFn: async () => {
-      const { data: memberData, error: memberError } = await supabase
-        .from('fund_members')
-        .select('*')
-        .eq('fund_id', fundId);
-
-      if (memberError) throw memberError;
-
-      // Fetch profiles for each member
-      const memberUserIds = memberData.map(m => m.user_id);
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('user_id, full_name, avatar_url')
-        .in('user_id', memberUserIds);
-
-      if (profileError) throw profileError;
-
-      return memberData.map(m => ({
+    if (!error && data) {
+      setMembers(data.map(m => ({
         ...m,
-        profile: profiles?.find(p => p.user_id === m.user_id),
-      })) as FundMember[];
-    },
-    enabled: !!fundId,
-  });
+        profile: Array.isArray(m.profile) ? m.profile[0] : m.profile
+      })));
+    }
+    setLoading(false);
+  };
 
-  // Fetch payments
-  const { data: payments = [], isLoading: paymentsLoading } = useQuery({
-    queryKey: ['fund-payments', fundId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('fund_id', fundId)
-        .order('submitted_at', { ascending: false });
+  useEffect(() => {
+    fetchMembers();
+  }, [fundId]);
 
-      if (error) throw error;
-      return data as Payment[];
-    },
-    enabled: !!fundId,
-  });
+  const verifyMember = async (memberId: string) => {
+    const { error } = await supabase
+      .from('fund_members')
+      .update({ is_verified: true })
+      .eq('id', memberId);
 
-  // Fetch spin results
-  const { data: spinResults = [] } = useQuery({
-    queryKey: ['spin-results', fundId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('spin_results')
-        .select('*')
-        .eq('fund_id', fundId)
-        .order('month', { ascending: false });
+    if (!error) {
+      await fetchMembers();
+    }
 
-      if (error) throw error;
-      return data as SpinResult[];
-    },
-    enabled: !!fundId,
-  });
+    return { error };
+  };
 
-  // Verify member
-  const verifyMemberMutation = useMutation({
-    mutationFn: async (memberId: string) => {
-      const { error } = await supabase
-        .from('fund_members')
-        .update({ is_verified: true })
-        .eq('id', memberId);
+  const markWinner = async (userId: string, month: number) => {
+    const { error } = await supabase
+      .from('fund_members')
+      .update({ has_won: true, won_month: month })
+      .eq('fund_id', fundId)
+      .eq('user_id', userId);
 
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fund-members', fundId] });
-    },
-  });
+    if (!error) {
+      await fetchMembers();
+    }
 
-  // Submit payment
-  const submitPaymentMutation = useMutation({
-    mutationFn: async (paymentData: {
-      month: number;
-      amount: number;
-      proof_text?: string;
-      proof_image?: string;
-    }) => {
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
-        .from('payments')
-        .insert({
-          fund_id: fundId,
-          member_id: user.id,
-          ...paymentData,
-        });
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fund-payments', fundId] });
-    },
-  });
-
-  // Approve payment
-  const approvePaymentMutation = useMutation({
-    mutationFn: async (paymentId: string) => {
-      const { error } = await supabase
-        .from('payments')
-        .update({ status: 'approved', approved_at: new Date().toISOString() })
-        .eq('id', paymentId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fund-payments', fundId] });
-    },
-  });
-
-  // Record spin result
-  const recordSpinMutation = useMutation({
-    mutationFn: async (spinData: {
-      month: number;
-      winner_id: string;
-      amount: number;
-    }) => {
-      // Insert spin result
-      const { error: spinError } = await supabase
-        .from('spin_results')
-        .insert({
-          fund_id: fundId,
-          ...spinData,
-        });
-
-      if (spinError) throw spinError;
-
-      // Update member as winner
-      const { error: memberError } = await supabase
-        .from('fund_members')
-        .update({ has_won: true, won_month: spinData.month })
-        .eq('fund_id', fundId)
-        .eq('user_id', spinData.winner_id);
-
-      if (memberError) throw memberError;
-
-      // Increment current month
-      const { error: fundError } = await supabase
-        .from('funds')
-        .update({ current_month: (fund?.current_month || 1) + 1 })
-        .eq('id', fundId);
-
-      if (fundError) throw fundError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fund', fundId] });
-      queryClient.invalidateQueries({ queryKey: ['fund-members', fundId] });
-      queryClient.invalidateQueries({ queryKey: ['spin-results', fundId] });
-    },
-  });
-
-  const isAdmin = fund?.admin_id === user?.id;
+    return { error };
+  };
 
   return {
-    fund,
     members,
+    loading,
+    verifyMember,
+    markWinner,
+    refetch: fetchMembers,
+  };
+};
+
+export const usePayments = (fundId: string | undefined) => {
+  const { user } = useAuth();
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPayments = async () => {
+    if (!fundId) {
+      setPayments([]);
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('fund_id', fundId)
+      .order('submitted_at', { ascending: false });
+
+    if (!error && data) {
+      setPayments(data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fundId]);
+
+  const submitPayment = async (data: {
+    month: number;
+    amount: number;
+    proof_text?: string;
+    proof_image?: string;
+  }) => {
+    if (!user || !fundId) return { error: new Error('Not authenticated') };
+
+    const { error } = await supabase
+      .from('payments')
+      .insert({
+        fund_id: fundId,
+        member_id: user.id,
+        ...data,
+      });
+
+    if (!error) {
+      await fetchPayments();
+    }
+
+    return { error };
+  };
+
+  const approvePayment = async (paymentId: string) => {
+    const { error } = await supabase
+      .from('payments')
+      .update({ status: 'approved', approved_at: new Date().toISOString() })
+      .eq('id', paymentId);
+
+    if (!error) {
+      await fetchPayments();
+    }
+
+    return { error };
+  };
+
+  const rejectPayment = async (paymentId: string) => {
+    const { error } = await supabase
+      .from('payments')
+      .update({ status: 'rejected' })
+      .eq('id', paymentId);
+
+    if (!error) {
+      await fetchPayments();
+    }
+
+    return { error };
+  };
+
+  return {
     payments,
-    spinResults,
-    isAdmin,
-    loading: fundLoading || membersLoading || paymentsLoading,
-    verifyMember: verifyMemberMutation.mutateAsync,
-    submitPayment: submitPaymentMutation.mutateAsync,
-    approvePayment: approvePaymentMutation.mutateAsync,
-    recordSpin: recordSpinMutation.mutateAsync,
+    loading,
+    submitPayment,
+    approvePayment,
+    rejectPayment,
+    refetch: fetchPayments,
+  };
+};
+
+export const useSpinResults = (fundId: string | undefined) => {
+  const { user } = useAuth();
+  const [results, setResults] = useState<SpinResult[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchResults = async () => {
+    if (!fundId) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('spin_results')
+      .select('*')
+      .eq('fund_id', fundId)
+      .order('month', { ascending: false });
+
+    if (!error && data) {
+      setResults(data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchResults();
+  }, [fundId]);
+
+  const recordSpin = async (data: {
+    month: number;
+    winner_id: string;
+    amount: number;
+  }) => {
+    if (!user || !fundId) return { error: new Error('Not authenticated') };
+
+    const { error } = await supabase
+      .from('spin_results')
+      .insert({
+        fund_id: fundId,
+        ...data,
+      });
+
+    if (!error) {
+      await fetchResults();
+    }
+
+    return { error };
+  };
+
+  return {
+    results,
+    loading,
+    recordSpin,
+    refetch: fetchResults,
   };
 };

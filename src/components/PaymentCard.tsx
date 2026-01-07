@@ -1,16 +1,23 @@
 import { motion } from 'framer-motion';
 import { CheckCircle, Clock, XCircle, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Payment } from '@/types';
 
 interface PaymentCardProps {
-  payment: Payment;
+  payment: {
+    id: string;
+    month: number;
+    amount: number;
+    status: string;
+    proof_image: string | null;
+    proof_text: string | null;
+    submitted_at: string;
+  };
   memberName: string;
   isAdmin?: boolean;
   onApprove?: (paymentId: string) => void;
 }
 
-const statusConfig = {
+const statusConfig: Record<string, { icon: typeof Clock; label: string; color: string; bg: string }> = {
   pending: {
     icon: Clock,
     label: 'Pending',
@@ -32,7 +39,7 @@ const statusConfig = {
 };
 
 const PaymentCard = ({ payment, memberName, isAdmin, onApprove }: PaymentCardProps) => {
-  const status = statusConfig[payment.status];
+  const status = statusConfig[payment.status] || statusConfig.pending;
   const StatusIcon = status.icon;
 
   return (
@@ -54,20 +61,20 @@ const PaymentCard = ({ payment, memberName, isAdmin, onApprove }: PaymentCardPro
             Month {payment.month} • ₹{payment.amount.toLocaleString()}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {new Date(payment.submittedAt).toLocaleDateString()}
+            {new Date(payment.submitted_at).toLocaleDateString()}
           </p>
         </div>
 
-        {payment.proofImage && (
+        {payment.proof_image && (
           <div className="w-16 h-16 rounded-lg bg-secondary flex items-center justify-center overflow-hidden">
             <ImageIcon className="w-6 h-6 text-muted-foreground" />
           </div>
         )}
       </div>
 
-      {payment.proofText && (
+      {payment.proof_text && (
         <p className="text-sm text-muted-foreground mt-3 p-2 bg-secondary/50 rounded-lg">
-          "{payment.proofText}"
+          "{payment.proof_text}"
         </p>
       )}
 
