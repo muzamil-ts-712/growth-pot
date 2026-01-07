@@ -1,77 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Sprout, Mail, Lock, User, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { Sprout, Mail, Lock, User, Phone, ArrowLeft, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/useAuth';
+import { useAppStore } from '@/store/appStore';
 
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSignup = location.pathname === '/signup';
-  const { signIn, signUp, user, loading: authLoading } = useAuth();
+  const { setCurrentUser } = useAppStore();
 
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     password: '',
+    role: 'member' as 'admin' | 'member',
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user && !authLoading) {
-      navigate('/dashboard');
-    }
-  }, [user, authLoading, navigate]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    
+    // Create mock user
+    const user = {
+      id: Math.random().toString(36).substring(2, 11),
+      name: formData.name || 'Demo User',
+      email: formData.email,
+      phone: formData.phone,
+      isVerified: true,
+      role: formData.role,
+      createdAt: new Date(),
+    };
 
-    try {
-      if (isSignup) {
-        if (!formData.name.trim()) {
-          setError('Please enter your full name');
-          setLoading(false);
-          return;
-        }
-        
-        const { error } = await signUp(formData.email, formData.password, formData.name);
-        
-        if (error) {
-          if (error.message.includes('already registered')) {
-            setError('This email is already registered. Please log in instead.');
-          } else {
-            setError(error.message);
-          }
-        }
-      } else {
-        const { error } = await signIn(formData.email, formData.password);
-        
-        if (error) {
-          if (error.message.includes('Invalid login credentials')) {
-            setError('Invalid email or password. Please try again.');
-          } else {
-            setError(error.message);
-          }
-        }
-      }
-    } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    setCurrentUser(user);
+    navigate('/dashboard');
   };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -105,17 +69,6 @@ const Auth = () => {
                 </p>
               </div>
             </div>
-
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 text-destructive text-sm"
-              >
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {error}
-              </motion.div>
-            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {isSignup && (
@@ -153,6 +106,25 @@ const Auth = () => {
                 </div>
               </div>
 
+              {isSignup && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                >
+                  <label className="block text-sm font-medium mb-2">Phone Number</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                      placeholder="+91 98765 43210"
+                    />
+                  </div>
+                </motion.div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium mb-2">Password</label>
                 <div className="relative">
@@ -164,31 +136,46 @@ const Auth = () => {
                     className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                     placeholder="••••••••"
                     required
-                    minLength={6}
                   />
                 </div>
-                {isSignup && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Must be at least 6 characters
-                  </p>
-                )}
               </div>
 
-              <Button 
-                type="submit" 
-                variant="hero" 
-                size="lg" 
-                className="w-full mt-6"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {isSignup ? 'Creating Account...' : 'Logging In...'}
-                  </>
-                ) : (
-                  isSignup ? 'Create Account' : 'Log In'
-                )}
+              {isSignup && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">I want to</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, role: 'admin' }))}
+                      className={`p-4 rounded-lg border text-left transition-all ${
+                        formData.role === 'admin'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-secondary hover:border-primary/50'
+                      }`}
+                    >
+                      <Shield className={`w-5 h-5 mb-2 ${formData.role === 'admin' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <p className="font-medium text-sm">Create Pots</p>
+                      <p className="text-xs text-muted-foreground">As an Admin</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, role: 'member' }))}
+                      className={`p-4 rounded-lg border text-left transition-all ${
+                        formData.role === 'member'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-secondary hover:border-primary/50'
+                      }`}
+                    >
+                      <User className={`w-5 h-5 mb-2 ${formData.role === 'member' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <p className="font-medium text-sm">Join Pots</p>
+                      <p className="text-xs text-muted-foreground">As a Member</p>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <Button type="submit" variant="hero" size="lg" className="w-full mt-6">
+                {isSignup ? 'Create Account' : 'Log In'}
               </Button>
             </form>
 

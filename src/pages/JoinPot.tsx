@@ -1,73 +1,44 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Users, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/useAuth';
-import { useFunds } from '@/hooks/useFunds';
+import { useAppStore } from '@/store/appStore';
 
 const JoinPot = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
-  const { getFundByCode, joinFund } = useFunds();
+  const { currentUser, joinFund } = useAppStore();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [joinedFundId, setJoinedFundId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
+  const handleJoin = () => {
+    if (!currentUser) {
       navigate('/login');
+      return;
     }
-  }, [user, authLoading, navigate]);
 
-  const handleJoin = async () => {
     if (code.length !== 6) {
       setError('Please enter a valid 6-digit code');
       return;
     }
 
-    setLoading(true);
-    setError('');
-
-    const { data: fund, error: fetchError } = await getFundByCode(code);
-
-    if (fetchError || !fund) {
+    const fund = joinFund(code.toUpperCase(), currentUser);
+    
+    if (fund) {
+      setSuccess(true);
+      setJoinedFundId(fund.id);
+      setError('');
+    } else {
       setError('Invalid code. Please check and try again.');
-      setLoading(false);
-      return;
     }
-
-    const { error: joinError } = await joinFund(fund.id);
-
-    setLoading(false);
-
-    if (joinError) {
-      if (joinError.message.includes('duplicate')) {
-        setError('You have already joined this pot.');
-      } else {
-        setError(joinError.message);
-      }
-      return;
-    }
-
-    setSuccess(true);
-    setJoinedFundId(fund.id);
   };
 
   const handleCodeChange = (value: string) => {
     setCode(value.toUpperCase().slice(0, 6));
     setError('');
   };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   if (success && joinedFundId) {
     return (
@@ -152,6 +123,14 @@ const JoinPot = () => {
               type="text"
               value={code}
               onChange={(e) => handleCodeChange(e.target.value)}
+              className="sr-only"
+              autoFocus
+              maxLength={6}
+            />
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => handleCodeChange(e.target.value)}
               className="w-full h-12 px-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all text-center font-mono text-lg uppercase tracking-widest"
               placeholder="Enter code"
               maxLength={6}
@@ -174,16 +153,9 @@ const JoinPot = () => {
             size="lg" 
             className="w-full"
             onClick={handleJoin}
-            disabled={code.length !== 6 || loading}
+            disabled={code.length !== 6}
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Joining...
-              </>
-            ) : (
-              'Join Pot'
-            )}
+            Join Pot
           </Button>
 
           <p className="text-xs text-muted-foreground mt-6">
