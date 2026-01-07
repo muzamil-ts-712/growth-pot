@@ -8,46 +8,43 @@ import { useFunds } from '@/hooks/useFunds';
 
 const CreatePot = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
-  const { createFund } = useFunds();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { createFund, isCreating } = useFunds();
   const [step, setStep] = useState(1);
   const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [createdFund, setCreatedFund] = useState<{ join_code: string; id: string } | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
-    total_amount: 100000,
+    totalAmount: 100000,
     duration: 10,
-    member_count: 10,
-    admin_commission: 2,
+    memberCount: 10,
+    adminCommission: 2,
   });
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (!authLoading && !isAuthenticated) {
       navigate('/login');
     }
-  }, [user, authLoading, navigate]);
+  }, [isAuthenticated, authLoading, navigate]);
 
-  const monthly_contribution = formData.total_amount / formData.duration;
+  const monthlyContribution = formData.totalAmount / formData.duration;
 
   const handleCreate = async () => {
-    setLoading(true);
+    try {
+      const fund = await createFund({
+        name: formData.name,
+        total_amount: formData.totalAmount,
+        monthly_contribution: monthlyContribution,
+        duration: formData.duration,
+        member_count: formData.memberCount,
+        admin_commission: formData.adminCommission,
+      });
 
-    const { fund, error } = await createFund({
-      name: formData.name,
-      total_amount: formData.total_amount,
-      monthly_contribution,
-      duration: formData.duration,
-      member_count: formData.member_count,
-      admin_commission: formData.admin_commission,
-    });
-
-    setLoading(false);
-
-    if (fund && !error) {
       setCreatedFund({ join_code: fund.join_code, id: fund.id });
       setStep(3);
+    } catch (error) {
+      console.error('Error creating fund:', error);
     }
   };
 
@@ -140,8 +137,8 @@ const CreatePot = () => {
                   </label>
                   <input
                     type="number"
-                    value={formData.total_amount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, total_amount: parseInt(e.target.value) || 0 }))}
+                    value={formData.totalAmount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, totalAmount: parseInt(e.target.value) || 0 }))}
                     className="w-full h-12 px-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                   />
                 </div>
@@ -169,8 +166,8 @@ const CreatePot = () => {
                   </label>
                   <input
                     type="number"
-                    value={formData.member_count}
-                    onChange={(e) => setFormData(prev => ({ ...prev, member_count: parseInt(e.target.value) || 1 }))}
+                    value={formData.memberCount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, memberCount: parseInt(e.target.value) || 1 }))}
                     className="w-full h-12 px-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                     min={2}
                     max={50}
@@ -183,8 +180,8 @@ const CreatePot = () => {
                   </label>
                   <input
                     type="number"
-                    value={formData.admin_commission}
-                    onChange={(e) => setFormData(prev => ({ ...prev, admin_commission: parseFloat(e.target.value) || 0 }))}
+                    value={formData.adminCommission}
+                    onChange={(e) => setFormData(prev => ({ ...prev, adminCommission: parseFloat(e.target.value) || 0 }))}
                     className="w-full h-12 px-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                     min={0}
                     max={10}
@@ -221,7 +218,7 @@ const CreatePot = () => {
               <div className="space-y-4">
                 <div className="flex justify-between py-3 border-b border-border">
                   <span className="text-muted-foreground">Total Pool</span>
-                  <span className="font-semibold">₹{formData.total_amount.toLocaleString()}</span>
+                  <span className="font-semibold">₹{formData.totalAmount.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-3 border-b border-border">
                   <span className="text-muted-foreground">Duration</span>
@@ -229,15 +226,15 @@ const CreatePot = () => {
                 </div>
                 <div className="flex justify-between py-3 border-b border-border">
                   <span className="text-muted-foreground">Members</span>
-                  <span className="font-semibold">{formData.member_count} people</span>
+                  <span className="font-semibold">{formData.memberCount} people</span>
                 </div>
                 <div className="flex justify-between py-3 border-b border-border">
                   <span className="text-muted-foreground">Monthly Contribution</span>
-                  <span className="font-semibold text-primary">₹{monthly_contribution.toLocaleString()}</span>
+                  <span className="font-semibold text-primary">₹{monthlyContribution.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-3">
                   <span className="text-muted-foreground">Your Commission</span>
-                  <span className="font-semibold">{formData.admin_commission}%</span>
+                  <span className="font-semibold">{formData.adminCommission}%</span>
                 </div>
               </div>
             </div>
@@ -246,14 +243,8 @@ const CreatePot = () => {
               <Button variant="outline" size="lg" className="flex-1" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button 
-                variant="hero" 
-                size="lg" 
-                className="flex-1" 
-                onClick={handleCreate}
-                disabled={loading}
-              >
-                {loading ? (
+              <Button variant="hero" size="lg" className="flex-1" onClick={handleCreate} disabled={isCreating}>
+                {isCreating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Creating...

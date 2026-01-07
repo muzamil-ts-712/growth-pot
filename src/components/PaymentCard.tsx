@@ -1,23 +1,16 @@
 import { motion } from 'framer-motion';
 import { CheckCircle, Clock, XCircle, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Payment } from '@/types';
 
 interface PaymentCardProps {
-  payment: {
-    id: string;
-    month: number;
-    amount: number;
-    status: string;
-    proof_image: string | null;
-    proof_text: string | null;
-    submitted_at: string;
-  };
+  payment: Payment;
   memberName: string;
   isAdmin?: boolean;
   onApprove?: (paymentId: string) => void;
 }
 
-const statusConfig: Record<string, { icon: typeof Clock; label: string; color: string; bg: string }> = {
+const statusConfig = {
   pending: {
     icon: Clock,
     label: 'Pending',
@@ -39,7 +32,7 @@ const statusConfig: Record<string, { icon: typeof Clock; label: string; color: s
 };
 
 const PaymentCard = ({ payment, memberName, isAdmin, onApprove }: PaymentCardProps) => {
-  const status = statusConfig[payment.status] || statusConfig.pending;
+  const status = statusConfig[payment.status];
   const StatusIcon = status.icon;
 
   return (
@@ -61,20 +54,20 @@ const PaymentCard = ({ payment, memberName, isAdmin, onApprove }: PaymentCardPro
             Month {payment.month} • ₹{payment.amount.toLocaleString()}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {new Date(payment.submitted_at).toLocaleDateString()}
+            {new Date(payment.submittedAt).toLocaleDateString()}
           </p>
         </div>
 
-        {payment.proof_image && (
+        {payment.proofImage && (
           <div className="w-16 h-16 rounded-lg bg-secondary flex items-center justify-center overflow-hidden">
             <ImageIcon className="w-6 h-6 text-muted-foreground" />
           </div>
         )}
       </div>
 
-      {payment.proof_text && (
+      {payment.proofText && (
         <p className="text-sm text-muted-foreground mt-3 p-2 bg-secondary/50 rounded-lg">
-          "{payment.proof_text}"
+          "{payment.proofText}"
         </p>
       )}
 

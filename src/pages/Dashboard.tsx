@@ -12,15 +12,26 @@ import MiaAssistant from '@/components/MiaAssistant';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, profile, signOut, loading: authLoading } = useAuth();
-  const { funds, loading: fundsLoading } = useFunds();
+  const { user, profile, signOut, isAuthenticated, loading: authLoading } = useAuth();
+  const { funds, fundsLoading } = useFunds();
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (!authLoading && !isAuthenticated) {
       navigate('/login');
     }
-  }, [user, authLoading, navigate]);
+  }, [isAuthenticated, authLoading, navigate]);
+
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/');
+  };
 
   if (authLoading || fundsLoading) {
     return (
@@ -33,17 +44,6 @@ const Dashboard = () => {
   if (!user) return null;
 
   const displayName = profile?.full_name || user.email?.split('@')[0] || 'User';
-
-  const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const handleLogout = async () => {
-    await signOut();
-    navigate('/');
-  };
 
   return (
     <div className="min-h-screen bg-background">
