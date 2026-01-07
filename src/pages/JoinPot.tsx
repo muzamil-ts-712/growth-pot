@@ -1,38 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Users, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/useAuth';
-import { useFunds } from '@/hooks/useFunds';
+import { useAppStore } from '@/store/appStore';
 
 const JoinPot = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, loading: authLoading } = useAuth();
-  const { joinFund, isJoining } = useFunds();
+  const { currentUser, joinFund } = useAppStore();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [joinedFundId, setJoinedFundId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+  const handleJoin = () => {
+    if (!currentUser) {
       navigate('/login');
+      return;
     }
-  }, [isAuthenticated, authLoading, navigate]);
 
-  const handleJoin = async () => {
     if (code.length !== 6) {
       setError('Please enter a valid 6-digit code');
       return;
     }
 
-    try {
-      const fund = await joinFund(code.toUpperCase());
+    const fund = joinFund(code.toUpperCase(), currentUser);
+    
+    if (fund) {
       setSuccess(true);
       setJoinedFundId(fund.id);
       setError('');
-    } catch (err) {
+    } else {
       setError('Invalid code. Please check and try again.');
     }
   };
@@ -41,14 +39,6 @@ const JoinPot = () => {
     setCode(value.toUpperCase().slice(0, 6));
     setError('');
   };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   if (success && joinedFundId) {
     return (
@@ -133,6 +123,14 @@ const JoinPot = () => {
               type="text"
               value={code}
               onChange={(e) => handleCodeChange(e.target.value)}
+              className="sr-only"
+              autoFocus
+              maxLength={6}
+            />
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => handleCodeChange(e.target.value)}
               className="w-full h-12 px-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all text-center font-mono text-lg uppercase tracking-widest"
               placeholder="Enter code"
               maxLength={6}
@@ -155,16 +153,9 @@ const JoinPot = () => {
             size="lg" 
             className="w-full"
             onClick={handleJoin}
-            disabled={code.length !== 6 || isJoining}
+            disabled={code.length !== 6}
           >
-            {isJoining ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Joining...
-              </>
-            ) : (
-              'Join Pot'
-            )}
+            Join Pot
           </Button>
 
           <p className="text-xs text-muted-foreground mt-6">
