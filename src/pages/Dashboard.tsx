@@ -8,7 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useFunds } from '@/hooks/useFunds';
-import MiaAssistant from '@/components/MiaAssistant';
+import ChandraAssistant from '@/components/ChandraAssistant';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -249,7 +249,7 @@ const Dashboard = () => {
         </div>
       </main>
 
-      <MiaAssistant />
+      <ChandraAssistant />
     </div>
   );
 };
