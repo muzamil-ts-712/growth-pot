@@ -6,11 +6,20 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { z } from 'zod';
 
+const phoneRegex = /^(\+?\d{1,3}[-.\s]?)?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}$/;
+
 const signupSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  email: z.string().email('Invalid email address'),
-  phone: z.string().optional(),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100, 'Name must be less than 100 characters'),
+  email: z.string().trim().email('Invalid email address').max(255, 'Email must be less than 255 characters'),
+  phone: z.string()
+    .trim()
+    .max(20, 'Phone number must be less than 20 characters')
+    .refine((val) => val === '' || phoneRegex.test(val), {
+      message: 'Invalid phone number format (e.g., +91 98765 43210)',
+    })
+    .optional()
+    .or(z.literal('')),
+  password: z.string().min(6, 'Password must be at least 6 characters').max(128, 'Password must be less than 128 characters'),
 });
 
 const loginSchema = z.object({
@@ -194,10 +203,12 @@ const Auth = () => {
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                      className="w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                      className={`w-full h-12 pl-11 pr-4 rounded-lg bg-secondary border ${errors.phone ? 'border-destructive' : 'border-border'} focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all`}
                       placeholder="+91 98765 43210"
+                      maxLength={20}
                     />
                   </div>
+                  {errors.phone && <p className="text-xs text-destructive mt-1">{errors.phone}</p>}
                 </motion.div>
               )}
 
