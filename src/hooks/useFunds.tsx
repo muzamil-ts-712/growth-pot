@@ -143,19 +143,19 @@ export const useFunds = () => {
     },
   });
 
-  // Join fund by code
+  // Join fund by code (uses secure RPC function)
   const joinFundMutation = useMutation({
     mutationFn: async (joinCode: string) => {
       if (!user) throw new Error('Not authenticated');
 
-      // Find fund by code
-      const { data: fund, error: findError } = await supabase
-        .from('funds')
-        .select('*')
-        .eq('join_code', joinCode.toUpperCase())
-        .single();
+      // Find fund by code using secure RPC function
+      const { data: fundData, error: findError } = await supabase
+        .rpc('get_fund_by_join_code', { join_code_input: joinCode });
 
-      if (findError || !fund) throw new Error('Invalid join code');
+      if (findError) throw new Error('Error looking up fund');
+      
+      const fund = fundData?.[0];
+      if (!fund) throw new Error('Invalid join code');
 
       // Check if already a member
       const { data: existing } = await supabase
