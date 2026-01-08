@@ -12,7 +12,7 @@ import PotStatusCard from '@/components/PotStatusCard';
 import MemberCard from '@/components/MemberCard';
 import PaymentCard from '@/components/PaymentCard';
 import SpinningWheel from '@/components/SpinningWheel';
-import MiaAssistant from '@/components/MiaAssistant';
+import ChandraAssistant from '@/components/ChandraAssistant';
 
 type TabType = 'overview' | 'members' | 'payments' | 'spin';
 
@@ -439,7 +439,7 @@ const PotDetails = () => {
         )}
       </AnimatePresence>
 
-      <MiaAssistant />
+      <ChandraAssistant />
     </div>
   );
 };
