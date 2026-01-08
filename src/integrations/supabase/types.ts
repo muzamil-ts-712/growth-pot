@@ -232,6 +232,8 @@ export type Database = {
           total_amount: number
         }[]
       }
+      is_fund_admin: { Args: { fund_id_input: string }; Returns: boolean }
+      is_fund_member: { Args: { fund_id_input: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
