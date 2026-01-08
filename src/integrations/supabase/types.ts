@@ -218,6 +218,20 @@ export type Database = {
     }
     Functions: {
       generate_join_code: { Args: never; Returns: string }
+      get_fund_by_join_code: {
+        Args: { join_code_input: string }
+        Returns: {
+          admin_commission: number
+          current_month: number
+          duration: number
+          id: string
+          member_count: number
+          monthly_contribution: number
+          name: string
+          status: string
+          total_amount: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
