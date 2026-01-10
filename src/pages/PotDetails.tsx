@@ -5,6 +5,7 @@ import {
   ArrowLeft, Users, Wallet, Calendar, Copy, Check, 
   Play, Upload, Trophy, Clock, Loader2
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useFundDetails } from '@/hooks/useFunds';
@@ -88,11 +89,25 @@ const PotDetails = () => {
     });
   };
 
+  const { toast } = useToast();
+
   const handlePaymentSubmit = async () => {
+    const trimmedNote = paymentNote.trim();
+    
+    if (trimmedNote.length === 0) {
+      toast({ title: "Error", description: "Please add a payment note", variant: "destructive" });
+      return;
+    }
+    
+    if (trimmedNote.length > 500) {
+      toast({ title: "Error", description: "Note too long (max 500 characters)", variant: "destructive" });
+      return;
+    }
+    
     await submitPayment({
       month: fund.current_month,
       amount: fund.monthly_contribution / fund.member_count,
-      proof_text: paymentNote,
+      proof_text: trimmedNote,
     });
     setShowPaymentForm(false);
     setPaymentNote('');
@@ -413,9 +428,13 @@ const PotDetails = () => {
                 <textarea
                   value={paymentNote}
                   onChange={(e) => setPaymentNote(e.target.value)}
+                  maxLength={500}
                   className="w-full h-24 px-4 py-3 rounded-lg bg-secondary border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none"
                   placeholder="e.g., Paid via UPI - Transaction ID: ABC123"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {paymentNote.length}/500 characters
+                </p>
               </div>
 
               <div className="flex gap-3">
