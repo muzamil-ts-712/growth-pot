@@ -270,7 +270,7 @@ const PotDetails = () => {
                             id: member.user_id,
                             name: member.profile?.full_name || 'Unknown',
                             email: '',
-                            phone: '',
+                            phone: member.profile?.phone || '',
                             isVerified: member.is_verified,
                             role: 'member',
                             createdAt: new Date(),
@@ -282,6 +282,7 @@ const PotDetails = () => {
                           payments: [],
                         }}
                         isAdmin={isAdmin}
+                        isCurrentUserAdmin={isAdmin}
                         onVerify={() => verifyMember(member.id)}
                       />
                     ))}
