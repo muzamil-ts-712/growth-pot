@@ -6,11 +6,10 @@ import { FundMember } from '@/types';
 interface MemberCardProps {
   member: FundMember;
   isAdmin?: boolean;
-  isCurrentUserAdmin?: boolean;
   onVerify?: (userId: string) => void;
 }
 
-const MemberCard = ({ member, isAdmin, isCurrentUserAdmin, onVerify }: MemberCardProps) => {
+const MemberCard = ({ member, isAdmin, onVerify }: MemberCardProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -39,10 +38,7 @@ const MemberCard = ({ member, isAdmin, isCurrentUserAdmin, onVerify }: MemberCar
             <Clock className="w-4 h-4 text-warning flex-shrink-0" />
           )}
         </div>
-        {/* Only show phone to admins */}
-        {isCurrentUserAdmin && member.user.phone && (
-          <p className="text-sm text-muted-foreground truncate">{member.user.phone}</p>
-        )}
+        <p className="text-sm text-muted-foreground truncate">{member.user.phone}</p>
         {member.hasWon && member.wonMonth && (
           <p className="text-xs text-primary mt-1">
             Won in Month {member.wonMonth}

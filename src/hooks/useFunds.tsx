@@ -28,7 +28,6 @@ export interface FundMember {
   profile?: {
     full_name: string;
     avatar_url: string | null;
-    phone?: string | null;
   };
 }
 
@@ -229,7 +228,7 @@ export const useFundDetails = (fundId: string) => {
       const memberUserIds = memberData.map(m => m.user_id);
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
-        .select('user_id, full_name, avatar_url, phone')
+        .select('user_id, full_name, avatar_url')
         .in('user_id', memberUserIds);
 
       if (profileError) throw profileError;
