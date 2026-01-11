@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useFunds } from '@/hooks/useFunds';
 import ChandraAssistant from '@/components/ChandraAssistant';
+import NotificationBell from '@/components/NotificationBell';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -58,6 +59,7 @@ const Dashboard = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <div className="text-right hidden sm:block">
               <p className="font-medium">{displayName}</p>
               <p className="text-xs text-muted-foreground">{user.email}</p>
