@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Moon, Star, Sparkles, TrendingUp, Coins, HelpCircle, Heart, PartyPopper, Trophy, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import chandraAvatar from '@/assets/chandra-avatar.webp';
 
 type Mood = 'happy' | 'thinking' | 'celebrating' | 'waving' | 'idle' | 'excited' | 'proud' | 'love';
 
@@ -25,20 +26,17 @@ const chandraResponses: Record<string, { text: string; mood: Mood }> = {
   'default': { text: "Hmm, let me think... 🤔\n\nI can help with:\n• 🏦 Fund setup\n• 💰 Payment tracking\n• 📊 Summaries\n• 💡 Name suggestions\n\nTry asking about these! ✨", mood: 'thinking' },
 };
 
-// Cute girl Chandra face component with more expressions
+// Chandra avatar component with mood-based animations
 const ChandraFace = ({ mood, size = 'large' }: { mood: Mood; size?: 'small' | 'large' }) => {
-  const baseSize = size === 'large' ? 'w-16 h-16' : 'w-10 h-10';
-  
-  // Hair color
-  const hairGradient = 'from-purple-900 via-purple-800 to-purple-900';
+  const baseSize = size === 'large' ? 'w-16 h-16' : 'w-12 h-12';
   
   // Face animations based on mood
   const faceAnimation = () => {
     switch (mood) {
-      case 'waving': return { rotate: [0, -10, 10, -10, 0] };
+      case 'waving': return { rotate: [0, -5, 5, -5, 0] };
       case 'celebrating': return { scale: [1, 1.1, 1], y: [0, -8, 0] };
       case 'excited': return { scale: [1, 1.15, 0.95, 1.1, 1], y: [0, -10, 0, -5, 0], rotate: [0, 5, -5, 3, 0] };
-      case 'thinking': return { rotate: [0, 5, 0, -5, 0] };
+      case 'thinking': return { rotate: [0, 3, 0, -3, 0] };
       case 'love': return { scale: [1, 1.05, 1], y: [0, -3, 0] };
       case 'proud': return { y: [0, -5, 0], scale: [1, 1.08, 1] };
       default: return { y: [0, -2, 0] };
@@ -53,104 +51,15 @@ const ChandraFace = ({ mood, size = 'large' }: { mood: Mood; size?: 'small' | 'l
       animate={faceAnimation()}
       transition={{ duration: animationDuration, repeat: Infinity, ease: "easeInOut" }}
     >
-      {/* Hair - back layer */}
-      <div className={`absolute inset-0 rounded-full bg-gradient-to-b ${hairGradient} scale-110`} />
-      
-      {/* Face */}
-      <div className="absolute inset-1 rounded-full bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 shadow-inner">
-        {/* Hair bangs */}
-        <div className={`absolute -top-0.5 left-1/2 -translate-x-1/2 w-3/4 h-3 rounded-b-full bg-gradient-to-b ${hairGradient}`} />
-        <div className={`absolute top-0 left-1 w-3 h-4 rounded-b-full bg-gradient-to-b ${hairGradient} rotate-12`} />
-        <div className={`absolute top-0 right-1 w-3 h-4 rounded-b-full bg-gradient-to-b ${hairGradient} -rotate-12`} />
-        
-        {/* Eyes */}
-        <motion.div 
-          className={`absolute ${size === 'large' ? 'top-6 left-3' : 'top-3.5 left-2'} ${size === 'large' ? 'w-2.5 h-3' : 'w-1.5 h-2'} rounded-full bg-gray-800`}
-          animate={
-            mood === 'happy' || mood === 'celebrating' || mood === 'love' || mood === 'excited'
-              ? { scaleY: [1, 0.2, 1] }
-              : mood === 'thinking'
-              ? { x: [0, 2, 0] }
-              : {}
-          }
-          transition={{ duration: 0.3, repeat: mood === 'celebrating' || mood === 'excited' ? Infinity : 0, repeatDelay: mood === 'excited' ? 0.5 : 2 }}
-        >
-          {/* Eye shine */}
-          <div className={`absolute ${size === 'large' ? 'top-0.5 left-0.5 w-1 h-1' : 'top-0 left-0 w-0.5 h-0.5'} rounded-full bg-white`} />
-        </motion.div>
-        <motion.div 
-          className={`absolute ${size === 'large' ? 'top-6 right-3' : 'top-3.5 right-2'} ${size === 'large' ? 'w-2.5 h-3' : 'w-1.5 h-2'} rounded-full bg-gray-800`}
-          animate={
-            mood === 'happy' || mood === 'celebrating' || mood === 'love' || mood === 'excited'
-              ? { scaleY: [1, 0.2, 1] }
-              : mood === 'thinking'
-              ? { x: [0, 2, 0] }
-              : {}
-          }
-          transition={{ duration: 0.3, repeat: mood === 'celebrating' || mood === 'excited' ? Infinity : 0, repeatDelay: mood === 'excited' ? 0.5 : 2 }}
-        >
-          {/* Eye shine */}
-          <div className={`absolute ${size === 'large' ? 'top-0.5 left-0.5 w-1 h-1' : 'top-0 left-0 w-0.5 h-0.5'} rounded-full bg-white`} />
-        </motion.div>
-        
-        {/* Heart eyes for love mood */}
-        {mood === 'love' && (
-          <>
-            <motion.div 
-              className={`absolute ${size === 'large' ? 'top-5 left-2' : 'top-3 left-1.5'}`}
-              animate={{ scale: [1, 1.3, 1] }}
-              transition={{ duration: 0.5, repeat: Infinity }}
-            >
-              <Heart className={`${size === 'large' ? 'w-4 h-4' : 'w-2.5 h-2.5'} text-pink-500 fill-pink-500`} />
-            </motion.div>
-            <motion.div 
-              className={`absolute ${size === 'large' ? 'top-5 right-2' : 'top-3 right-1.5'}`}
-              animate={{ scale: [1, 1.3, 1] }}
-              transition={{ duration: 0.5, repeat: Infinity, delay: 0.2 }}
-            >
-              <Heart className={`${size === 'large' ? 'w-4 h-4' : 'w-2.5 h-2.5'} text-pink-500 fill-pink-500`} />
-            </motion.div>
-          </>
-        )}
-        
-        {/* Blush */}
-        <motion.div 
-          className={`absolute ${size === 'large' ? 'top-8 left-1.5' : 'top-5 left-1'} ${size === 'large' ? 'w-2.5 h-1.5' : 'w-1.5 h-1'} rounded-full bg-pink-300/70`}
-          animate={mood === 'love' || mood === 'excited' ? { opacity: [0.7, 1, 0.7] } : {}}
-          transition={{ duration: 1, repeat: Infinity }}
-        />
-        <motion.div 
-          className={`absolute ${size === 'large' ? 'top-8 right-1.5' : 'top-5 right-1'} ${size === 'large' ? 'w-2.5 h-1.5' : 'w-1.5 h-1'} rounded-full bg-pink-300/70`}
-          animate={mood === 'love' || mood === 'excited' ? { opacity: [0.7, 1, 0.7] } : {}}
-          transition={{ duration: 1, repeat: Infinity }}
-        />
-        
-        {/* Mouth */}
-        <motion.div 
-          className={`absolute ${size === 'large' ? 'bottom-3 left-1/2' : 'bottom-2 left-1/2'} -translate-x-1/2`}
-          animate={mood === 'excited' ? { scale: [1, 1.2, 1] } : {}}
-          transition={{ duration: 0.3, repeat: Infinity }}
-        >
-          {mood === 'excited' || mood === 'celebrating' ? (
-            // Big open smile for excited/celebrating
-            <div className={`${size === 'large' ? 'w-5 h-3' : 'w-3 h-2'} rounded-b-full bg-gray-800 relative overflow-hidden`}>
-              <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 ${size === 'large' ? 'w-3 h-1.5' : 'w-2 h-1'} rounded-t-full bg-pink-400`} />
-            </div>
-          ) : mood === 'thinking' ? (
-            // Wavy thinking mouth
-            <div className={`${size === 'large' ? 'w-4 h-1' : 'w-2.5 h-0.5'} rounded-full bg-gray-700`} />
-          ) : (
-            // Regular happy smile
-            <div 
-              className={`${size === 'large' ? 'w-4 h-2' : 'w-2.5 h-1'} rounded-b-full bg-gray-800`}
-              style={{ borderRadius: '0 0 50% 50%' }}
-            />
-          )}
-        </motion.div>
-      </div>
+      {/* Avatar Image */}
+      <img 
+        src={chandraAvatar} 
+        alt="Chandra" 
+        className="w-full h-full rounded-full object-cover border-2 border-purple-300 shadow-lg"
+      />
       
       {/* Glow effect */}
-      <div className="absolute inset-0 rounded-full bg-amber-300/20 blur-md -z-10" />
+      <div className="absolute inset-0 rounded-full bg-purple-400/30 blur-md -z-10" />
       
       {/* Decorative elements based on mood */}
       {(mood === 'celebrating' || mood === 'excited') && (
@@ -210,6 +119,16 @@ const ChandraFace = ({ mood, size = 'large' }: { mood: Mood; size?: 'small' | 'l
           transition={{ duration: 0.8, repeat: Infinity }}
         >
           <span className="text-lg">👋</span>
+        </motion.div>
+      )}
+      
+      {mood === 'thinking' && (
+        <motion.div
+          className="absolute -top-2 -right-1"
+          animate={{ opacity: [0.5, 1, 0.5], scale: [0.9, 1.1, 0.9] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        >
+          <span className="text-sm">🤔</span>
         </motion.div>
       )}
     </motion.div>
