@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Users, Wallet, Calendar, Copy, Check, 
-  Play, Upload, Trophy, Clock, Loader2
+  Play, Upload, Trophy, Clock, Loader2, Bell
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useFundDetails } from '@/hooks/useFunds';
+import { useSendReminders } from '@/hooks/useNotifications';
 import PotStatusCard from '@/components/PotStatusCard';
 import MemberCard from '@/components/MemberCard';
 import PaymentCard from '@/components/PaymentCard';
@@ -16,6 +17,91 @@ import SpinningWheel from '@/components/SpinningWheel';
 import ChandraAssistant from '@/components/ChandraAssistant';
 
 type TabType = 'overview' | 'members' | 'payments' | 'spin';
+
+// Quick Actions Card with Send Reminders feature for admins
+interface QuickActionsCardProps {
+  fund: { id: string; name: string; monthly_contribution: number; member_count: number; current_month: number };
+  isAdmin: boolean;
+  eligibleForSpin: { id: string }[];
+  setActiveTab: (tab: TabType) => void;
+  setShowPaymentForm: (show: boolean) => void;
+}
+
+const QuickActionsCard = ({ fund, isAdmin, eligibleForSpin, setActiveTab, setShowPaymentForm }: QuickActionsCardProps) => {
+  const { toast } = useToast();
+  const sendReminders = useSendReminders();
+
+  const handleSendReminders = async () => {
+    try {
+      const result = await sendReminders.mutateAsync({ fundId: fund.id, fundName: fund.name });
+      if (result.sent > 0) {
+        toast({
+          title: "Reminders Sent! 📬",
+          description: `Sent payment reminders to ${result.sent} member${result.sent > 1 ? 's' : ''}.`,
+        });
+      } else {
+        toast({
+          title: "All caught up! ✅",
+          description: "Everyone has already submitted their payment for this month.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to send reminders. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <div className="glass-card p-6">
+      <h3 className="font-display text-lg font-semibold mb-4">Quick Actions</h3>
+      <div className="space-y-3">
+        {!isAdmin && (
+          <Button 
+            variant="hero" 
+            className="w-full"
+            onClick={() => setShowPaymentForm(true)}
+          >
+            <Upload className="w-4 h-4" />
+            Submit Payment
+          </Button>
+        )}
+        {isAdmin && (
+          <>
+            <Button 
+              variant="hero" 
+              className="w-full"
+              onClick={() => setActiveTab('spin')}
+              disabled={eligibleForSpin.length < 2}
+            >
+              <Play className="w-4 h-4" />
+              Start Monthly Spin
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={handleSendReminders}
+              disabled={sendReminders.isPending}
+            >
+              <Bell className="w-4 h-4" />
+              {sendReminders.isPending ? 'Sending...' : 'Send Payment Reminders'}
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => setActiveTab('payments')}
+            >
+              <Clock className="w-4 h-4" />
+              Review Payments
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const PotDetails = () => {
   const navigate = useNavigate();
@@ -197,42 +283,13 @@ const PotDetails = () => {
               >
                 <PotStatusCard fund={fundForStatus} collectedAmount={approvedAmount} />
                 
-                <div className="glass-card p-6">
-                  <h3 className="font-display text-lg font-semibold mb-4">Quick Actions</h3>
-                  <div className="space-y-3">
-                    {!isAdmin && (
-                      <Button 
-                        variant="hero" 
-                        className="w-full"
-                        onClick={() => setShowPaymentForm(true)}
-                      >
-                        <Upload className="w-4 h-4" />
-                        Submit Payment
-                      </Button>
-                    )}
-                    {isAdmin && (
-                      <>
-                        <Button 
-                          variant="hero" 
-                          className="w-full"
-                          onClick={() => setActiveTab('spin')}
-                          disabled={eligibleForSpin.length < 2}
-                        >
-                          <Play className="w-4 h-4" />
-                          Start Monthly Spin
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full"
-                          onClick={() => setActiveTab('payments')}
-                        >
-                          <Clock className="w-4 h-4" />
-                          Review Payments
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
+                <QuickActionsCard 
+                  fund={fund}
+                  isAdmin={isAdmin}
+                  eligibleForSpin={eligibleForSpin}
+                  setActiveTab={setActiveTab}
+                  setShowPaymentForm={setShowPaymentForm}
+                />
               </motion.div>
             )}
 
