@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { z } from 'zod';
 
-const phoneRegex = /^(\+?\d{1,3}[-.\s]?)?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}$/;
+// Indian phone: +91 followed by 10 digits, with optional spaces/dashes
+const phoneRegex = /^(\+91[-.\s]?)?[6-9]\d{4}[-.\s]?\d{5}$/;
 
 const signupSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100, 'Name must be less than 100 characters'),
