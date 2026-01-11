@@ -384,7 +384,7 @@ const ChandraAssistant = () => {
                     className={`max-w-[85%] p-3 rounded-2xl text-sm whitespace-pre-line ${
                       msg.isUser
                         ? 'bg-primary text-primary-foreground rounded-br-sm'
-                        : 'bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 text-gray-900 dark:text-gray-100 rounded-bl-sm shadow-sm'
+                        : 'bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 text-foreground rounded-bl-sm shadow-sm'
                     }`}
                   >
                     {msg.text}
