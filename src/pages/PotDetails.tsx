@@ -20,6 +20,7 @@ type TabType = 'overview' | 'members' | 'payments' | 'spin';
 const PotDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
   const { isAuthenticated, loading: authLoading, user } = useAuth();
   const { 
     fund, 
@@ -88,8 +89,6 @@ const PotDetails = () => {
       amount: fund.monthly_contribution * (1 - fund.admin_commission / 100),
     });
   };
-
-  const { toast } = useToast();
 
   const handlePaymentSubmit = async () => {
     const trimmedNote = paymentNote.trim();
