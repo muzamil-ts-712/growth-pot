@@ -1,29 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Moon, Star, Sparkles, TrendingUp, Coins, HelpCircle, Heart, PartyPopper, Trophy, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useChandraChat } from '@/hooks/useChandraChat';
 import chandraAvatar from '@/assets/chandra-avatar.webp';
 
 type Mood = 'happy' | 'thinking' | 'celebrating' | 'waving' | 'idle' | 'excited' | 'proud' | 'love';
 
-const chandraResponses: Record<string, { text: string; mood: Mood }> = {
-  'hello': { text: "Namaste! 🙏 I'm Chandra, your friendly pot assistant! Ready to help you grow your savings! ✨", mood: 'waving' },
-  'hi': { text: "Hey there! 🌙 Chandra here! What can I help you with today?", mood: 'happy' },
-  'help': { text: "I'm here to help you! 💫\n\n• 🏦 Setup your fund\n• 💰 Track payments\n• 📊 View summaries\n• 💡 Suggest fund names\n\nJust ask me anything!", mood: 'happy' },
-  'setup': { text: "To setup your fund:\n\n1️⃣ Click 'Create New Pot'\n2️⃣ Name your pot (I can suggest names!)\n3️⃣ Set contribution & duration\n4️⃣ Share the join code!\n\nNeed a name suggestion? Just ask! 🎯", mood: 'thinking' },
-  'name': { text: "Ooh, naming time! 🌟 Here are some ideas:\n\n• 'Golden Circle'\n• 'Unity Pot'\n• 'Dream Builders'\n• 'Fortune Friends'\n• 'Money Monsoon'\n\nWant more? Just say 'more names'! 💫", mood: 'celebrating' },
-  'more names': { text: "More creative names! ✨\n\n• 'Lakshmi Blessings'\n• 'Wealth Warriors'\n• 'Savings Squad'\n• 'Prosperity Pool'\n• 'Growth Garden'\n\nPick one you love! 🎉", mood: 'happy' },
-  'payment': { text: "Payment tracking made easy! 💸\n\n1. Go to your pot details\n2. Click 'Submit Payment'\n3. Add payment proof\n4. Wait for approval ✅\n\nI'll celebrate when it's approved! 🎊", mood: 'thinking' },
-  'approved': { text: "🎉 YAYYY! Payment Approved! 🎉\n\nYour payment has been verified! Keep up the great work, savings superstar! 💪✨\n\nYou're one step closer to your goals! 🌟", mood: 'excited' },
-  'track': { text: "To track your payments:\n\n📊 Check your pot's dashboard\n💰 See pending & approved\n📅 View payment history\n\nEverything at a glance! 👀", mood: 'happy' },
-  'summary': { text: "Here's what I can tell you:\n\n🎯 Your pot progress\n💰 Total collected\n👥 Member status\n🏆 Past winners\n\nGo to Pot Details for full stats! 📈", mood: 'thinking' },
-  'spin': { text: "The magical spin! 🎡✨\n\nEvery month, one lucky member wins the pot! The wheel spins fairly for everyone who hasn't won yet.\n\nMay fortune favor you! 🌟", mood: 'celebrating' },
-  'winner': { text: "🏆🎊 WE HAVE A WINNER! 🎊🏆\n\nCongratulations to the lucky winner! The pot is yours this month!\n\nEveryone celebrate! 🎉💃🕺", mood: 'excited' },
-  'win': { text: "🎉 CONGRATULATIONS! 🎉\n\nWinning feels amazing! The pot money is all yours this month! Use it wisely and keep contributing! 💪", mood: 'celebrating' },
-  'congratulations': { text: "🥳 Woohoo! This calls for a celebration! 🎊\n\nI'm so happy for you! Keep shining bright like a star! ⭐💖", mood: 'love' },
-  'thank': { text: "Aww, you're so sweet! 💕\n\nI love helping you! It makes my heart happy! 🌸✨\n\nAnything else I can help with?", mood: 'love' },
-  'chitti': { text: "Chitti is magical! 🌙\n\n1️⃣ Friends contribute monthly\n2️⃣ Pool the money together\n3️⃣ One person wins each month\n4️⃣ Everyone wins once!\n\nTogether we grow! 🌱", mood: 'happy' },
-  'default': { text: "Hmm, let me think... 🤔\n\nI can help with:\n• 🏦 Fund setup\n• 💰 Payment tracking\n• 📊 Summaries\n• 💡 Name suggestions\n\nTry asking about these! ✨", mood: 'thinking' },
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+// Mood detection based on response content
+const detectMood = (text: string): Mood => {
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes('congratulations') || lowerText.includes('winner') || lowerText.includes('🎉') || lowerText.includes('🏆')) {
+    return 'celebrating';
+  }
+  if (lowerText.includes('love') || lowerText.includes('thank') || lowerText.includes('💕') || lowerText.includes('❤️')) {
+    return 'love';
+  }
+  if (lowerText.includes('namaste') || lowerText.includes('hello') || lowerText.includes('hi')) {
+    return 'waving';
+  }
+  if (lowerText.includes('excited') || lowerText.includes('amazing') || lowerText.includes('wonderful')) {
+    return 'excited';
+  }
+  if (lowerText.includes('let me') || lowerText.includes('think') || lowerText.includes('hmm')) {
+    return 'thinking';
+  }
+  return 'happy';
 };
 
 // Chandra avatar component with mood-based animations
@@ -180,20 +187,28 @@ const QuickActions = ({ onAction }: { onAction: (text: string) => void }) => (
 const ChandraAssistant = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentMood, setCurrentMood] = useState<Mood>('idle');
-  const [messages, setMessages] = useState<{ text: string; isUser: boolean }[]>([
+  const [displayMessages, setDisplayMessages] = useState<{ text: string; isUser: boolean }[]>([
     { text: "Namaste! 🙏 I'm Chandra, your pot buddy! ✨\n\nI can help you setup funds, track payments, and even suggest cool names! What would you like to do?", isUser: false }
   ]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const { streamChat, isLoading } = useChandraChat();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [displayMessages]);
 
   // Idle animation cycle
   useEffect(() => {
-    if (!isTyping && messages.length > 0) {
+    if (!isTyping && !isLoading && displayMessages.length > 0) {
       const timer = setTimeout(() => setCurrentMood('idle'), 3000);
       return () => clearTimeout(timer);
     }
-  }, [messages, isTyping]);
+  }, [displayMessages, isTyping, isLoading]);
 
   // Trigger celebration animation
   const triggerCelebration = () => {
@@ -201,64 +216,83 @@ const ChandraAssistant = () => {
     setTimeout(() => setShowConfetti(false), 3000);
   };
 
-  const processMessage = (userMessage: string) => {
-    const lowerInput = userMessage.toLowerCase();
-    let response = chandraResponses.default;
-    
-    // Check for celebration triggers
-    const celebrationTriggers = ['approved', 'winner', 'won', 'congratulations', 'congrats'];
-    const shouldCelebrate = celebrationTriggers.some(trigger => lowerInput.includes(trigger));
-    
-    for (const [key, value] of Object.entries(chandraResponses)) {
-      if (lowerInput.includes(key)) {
-        response = value;
-        break;
-      }
-    }
-    
-    if (shouldCelebrate) {
+  // Check if response warrants celebration
+  const checkForCelebration = (text: string) => {
+    const celebrationTriggers = ['congratulations', 'winner', 'won', 'approved', '🎉', '🏆'];
+    if (celebrationTriggers.some(trigger => text.toLowerCase().includes(trigger))) {
       triggerCelebration();
     }
-    
-    return response;
   };
 
   // Public method to trigger reactions from parent components
   const triggerReaction = (type: 'paymentApproved' | 'spinWinner' | 'newMember') => {
-    switch (type) {
-      case 'paymentApproved':
-        setCurrentMood('excited');
-        triggerCelebration();
-        setMessages(prev => [...prev, { text: chandraResponses.approved.text, isUser: false }]);
-        break;
-      case 'spinWinner':
-        setCurrentMood('excited');
-        triggerCelebration();
-        setMessages(prev => [...prev, { text: chandraResponses.winner.text, isUser: false }]);
-        break;
-      case 'newMember':
-        setCurrentMood('love');
-        setMessages(prev => [...prev, { text: "Welcome to the family! 🎉💕\n\nSo excited to have a new member! Let's grow together! ✨", isUser: false }]);
-        break;
+    const reactions = {
+      paymentApproved: "🎉 YAYYY! Payment Approved! 🎉\n\nYour payment has been verified! Keep up the great work, savings superstar! 💪✨",
+      spinWinner: "🏆🎊 WE HAVE A WINNER! 🎊🏆\n\nCongratulations to the lucky winner! The pot is yours this month!",
+      newMember: "Welcome to the family! 🎉💕\n\nSo excited to have a new member! Let's grow together! ✨"
+    };
+
+    if (type === 'paymentApproved' || type === 'spinWinner') {
+      setCurrentMood('excited');
+      triggerCelebration();
+    } else {
+      setCurrentMood('love');
     }
+    
+    setDisplayMessages(prev => [...prev, { text: reactions[type], isUser: false }]);
     if (!isOpen) setIsOpen(true);
   };
 
-  const handleSend = (text?: string) => {
+  const handleSend = async (text?: string) => {
     const messageText = text || input.trim();
-    if (!messageText) return;
+    if (!messageText || isLoading) return;
 
-    setMessages(prev => [...prev, { text: messageText, isUser: true }]);
+    // Add user message to display
+    setDisplayMessages(prev => [...prev, { text: messageText, isUser: true }]);
     setInput('');
     setIsTyping(true);
     setCurrentMood('thinking');
 
-    setTimeout(() => {
-      const response = processMessage(messageText);
-      setCurrentMood(response.mood);
-      setMessages(prev => [...prev, { text: response.text, isUser: false }]);
-      setIsTyping(false);
-    }, 800);
+    // Build chat history for API
+    const newUserMessage: ChatMessage = { role: 'user', content: messageText };
+    const updatedHistory = [...chatHistory, newUserMessage];
+    setChatHistory(updatedHistory);
+
+    let assistantResponse = '';
+
+    await streamChat({
+      messages: updatedHistory,
+      onDelta: (chunk) => {
+        assistantResponse += chunk;
+        setDisplayMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (!last?.isUser && prev.length > 1 && last?.text !== displayMessages[displayMessages.length - 1]?.text) {
+            // Update the last assistant message
+            return prev.map((m, i) => (i === prev.length - 1 ? { ...m, text: assistantResponse } : m));
+          }
+          // First chunk - add new assistant message
+          return [...prev, { text: assistantResponse, isUser: false }];
+        });
+        // Update mood based on content as it streams
+        const mood = detectMood(assistantResponse);
+        setCurrentMood(mood);
+      },
+      onDone: () => {
+        setIsTyping(false);
+        setChatHistory(prev => [...prev, { role: 'assistant', content: assistantResponse }]);
+        checkForCelebration(assistantResponse);
+        const finalMood = detectMood(assistantResponse);
+        setCurrentMood(finalMood);
+      },
+      onError: (error) => {
+        setIsTyping(false);
+        setCurrentMood('thinking');
+        setDisplayMessages(prev => [...prev, { 
+          text: `Oops! ${error} 🌟\n\nLet me try that again in a moment!`, 
+          isUser: false 
+        }]);
+      }
+    });
   };
 
   return (
@@ -372,7 +406,7 @@ const ChandraAssistant = () => {
 
             {/* Messages */}
             <div className="h-64 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-purple-50/5 to-transparent">
-              {messages.map((msg, i) => (
+              {displayMessages.map((msg, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -391,7 +425,7 @@ const ChandraAssistant = () => {
                   </div>
                 </motion.div>
               ))}
-              {isTyping && (
+              {isTyping && isLoading && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -411,6 +445,7 @@ const ChandraAssistant = () => {
                   </div>
                 </motion.div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
