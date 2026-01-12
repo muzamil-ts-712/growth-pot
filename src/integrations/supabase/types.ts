@@ -290,6 +290,7 @@ export type Database = {
       }
       is_fund_admin: { Args: { fund_id_input: string }; Returns: boolean }
       is_fund_member: { Args: { fund_id_input: string }; Returns: boolean }
+      shares_fund_with: { Args: { target_user_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
