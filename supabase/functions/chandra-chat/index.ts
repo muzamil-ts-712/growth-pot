@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,13 +37,77 @@ const SYSTEM_PROMPT = `You are Chandra, a friendly and enthusiastic AI assistant
 
 Remember: You're a pot buddy helping users manage their community savings!`;
 
+// Input validation for messages
+function validateMessages(messages: unknown): boolean {
+  if (!Array.isArray(messages)) return false;
+  if (messages.length === 0 || messages.length > 50) return false;
+  
+  return messages.every(msg => {
+    if (typeof msg !== 'object' || msg === null) return false;
+    const { role, content } = msg as { role?: unknown; content?: unknown };
+    if (typeof role !== 'string' || !['user', 'assistant'].includes(role)) return false;
+    if (typeof content !== 'string' || content.length === 0 || content.length > 4000) return false;
+    return true;
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages } = await req.json();
+    // Authenticate the user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Please log in to chat with Chandra 🔐" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Verify JWT and get user claims
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      console.error("Auth error:", claimsError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid session 🔐" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+    console.log("Authenticated user:", userId);
+
+    // Parse and validate input
+    const body = await req.json();
+    const { messages } = body;
+    
+    if (!validateMessages(messages)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid messages format" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {

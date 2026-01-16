@@ -117,12 +117,14 @@ const PotDetails = () => {
     verifyMember,
     submitPayment,
     approvePayment,
-    recordSpin
+    conductSpin,
+    isSpinning: spinMutationPending
   } = useFundDetails(id || '');
   
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [copied, setCopied] = useState(false);
-  const [isSpinning, setIsSpinning] = useState(false);
+  const [isSpinAnimating, setIsSpinAnimating] = useState(false);
+  const [serverWinner, setServerWinner] = useState<{ id: string; name: string } | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentNote, setPaymentNote] = useState('');
 
@@ -161,19 +163,39 @@ const PotDetails = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSpin = () => {
-    if (eligibleForSpin.length > 0) {
-      setIsSpinning(true);
+  // Server-side spin: calls the secure RPC function first, then animates
+  const handleSpin = async () => {
+    if (eligibleForSpin.length < 2 || spinMutationPending || isSpinAnimating) return;
+    
+    try {
+      // Call server-side function to conduct spin securely
+      const result = await conductSpin();
+      
+      // Set the server-determined winner for the animation
+      setServerWinner({
+        id: result.winner_id,
+        name: result.winner_name
+      });
+      
+      // Start the visual animation
+      setIsSpinAnimating(true);
+      
+      toast({
+        title: "Spin Complete! 🎉",
+        description: `${result.winner_name} wins ₹${result.amount.toLocaleString()}!`,
+      });
+    } catch (error) {
+      toast({
+        title: "Spin Failed",
+        description: error instanceof Error ? error.message : "Could not conduct spin",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleSpinComplete = async (winner: { id: string; name: string }) => {
-    setIsSpinning(false);
-    await recordSpin({
-      month: fund.current_month,
-      winner_id: winner.id,
-      amount: fund.monthly_contribution * (1 - fund.admin_commission / 100),
-    });
+  const handleSpinAnimationComplete = () => {
+    setIsSpinAnimating(false);
+    setServerWinner(null);
   };
 
   const handlePaymentSubmit = async () => {
@@ -436,19 +458,25 @@ const PotDetails = () => {
                         id: m.user_id, 
                         name: m.profile?.full_name || 'Unknown' 
                       }))}
-                      onComplete={handleSpinComplete}
-                      isSpinning={isSpinning}
+                      onComplete={handleSpinAnimationComplete}
+                      isSpinning={isSpinAnimating}
+                      predeterminedWinner={serverWinner}
                     />
 
-                    {isAdmin && !isSpinning && (
+                    {isAdmin && !isSpinAnimating && (
                       <Button
                         variant="glow"
                         size="xl"
                         onClick={handleSpin}
                         className="mt-8"
+                        disabled={spinMutationPending}
                       >
-                        <Play className="w-5 h-5" />
-                        Start the Spin!
+                        {spinMutationPending ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Play className="w-5 h-5" />
+                        )}
+                        {spinMutationPending ? 'Spinning...' : 'Start the Spin!'}
                       </Button>
                     )}
                   </>

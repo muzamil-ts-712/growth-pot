@@ -4,13 +4,23 @@ import { Sparkles } from 'lucide-react';
 
 interface SpinningWheelProps {
   members: { id: string; name: string }[];
-  onComplete: (winner: { id: string; name: string }) => void;
+  onComplete: () => void;
   isSpinning: boolean;
+  predeterminedWinner: { id: string; name: string } | null;
 }
 
-const SpinningWheel = ({ members, onComplete, isSpinning }: SpinningWheelProps) => {
+/**
+ * SpinningWheel - Visual animation component for the monthly spin
+ * 
+ * SECURITY NOTE: This component is purely visual. The actual winner selection
+ * happens server-side via the conduct_spin RPC function. The predeterminedWinner
+ * is provided by the server BEFORE the animation starts, ensuring:
+ * 1. Winner selection cannot be manipulated client-side
+ * 2. The result is cryptographically random (server-side)
+ * 3. Duplicate spins are prevented at the database level
+ */
+const SpinningWheel = ({ members, onComplete, isSpinning, predeterminedWinner }: SpinningWheelProps) => {
   const [rotation, setRotation] = useState(0);
-  const [winner, setWinner] = useState<{ id: string; name: string } | null>(null);
   const [showWinner, setShowWinner] = useState(false);
 
   const colors = [
@@ -23,9 +33,17 @@ const SpinningWheel = ({ members, onComplete, isSpinning }: SpinningWheelProps) 
   ];
 
   useEffect(() => {
-    if (isSpinning && members.length > 0) {
-      const winnerIndex = Math.floor(Math.random() * members.length);
-      const baseRotation = 360 * 8; // 8 full spins
+    if (isSpinning && members.length > 0 && predeterminedWinner) {
+      // Find the index of the server-determined winner
+      const winnerIndex = members.findIndex(m => m.id === predeterminedWinner.id);
+      
+      if (winnerIndex === -1) {
+        // Winner not found in members list, complete immediately
+        onComplete();
+        return;
+      }
+      
+      const baseRotation = 360 * 8; // 8 full spins for visual effect
       const segmentAngle = 360 / members.length;
       const winnerAngle = winnerIndex * segmentAngle + segmentAngle / 2;
       const finalRotation = baseRotation + (360 - winnerAngle);
@@ -33,13 +51,13 @@ const SpinningWheel = ({ members, onComplete, isSpinning }: SpinningWheelProps) 
       setRotation(finalRotation);
       setShowWinner(false);
 
+      // Show winner after animation completes
       setTimeout(() => {
-        setWinner(members[winnerIndex]);
         setShowWinner(true);
-        onComplete(members[winnerIndex]);
+        onComplete();
       }, 5000);
     }
-  }, [isSpinning, members, onComplete]);
+  }, [isSpinning, members, predeterminedWinner, onComplete]);
 
   const segmentAngle = 360 / members.length;
 
@@ -97,7 +115,7 @@ const SpinningWheel = ({ members, onComplete, isSpinning }: SpinningWheelProps) 
 
       {/* Winner Announcement */}
       <AnimatePresence>
-        {showWinner && winner && (
+        {showWinner && predeterminedWinner && (
           <motion.div
             initial={{ opacity: 0, scale: 0.5, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -112,7 +130,7 @@ const SpinningWheel = ({ members, onComplete, isSpinning }: SpinningWheelProps) 
             >
               <p className="text-muted-foreground text-sm mb-2">🎉 Winner!</p>
               <h3 className="text-2xl md:text-3xl font-display font-bold text-gradient">
-                {winner.name}
+                {predeterminedWinner.name}
               </h3>
             </motion.div>
           </motion.div>
