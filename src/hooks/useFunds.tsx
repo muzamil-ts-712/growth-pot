@@ -329,39 +329,27 @@ export const useFundDetails = (fundId: string) => {
     },
   });
 
-  // Record spin result
-  const recordSpinMutation = useMutation({
-    mutationFn: async (spinData: {
-      month: number;
-      winner_id: string;
-      amount: number;
-    }) => {
-      // Insert spin result
-      const { error: spinError } = await supabase
-        .from('spin_results')
-        .insert({
-          fund_id: fundId,
-          ...spinData,
-        });
+  // Conduct spin using secure server-side RPC function
+  const conductSpinMutation = useMutation({
+    mutationFn: async (): Promise<{ winner_id: string; winner_name: string; amount: number; month: number }> => {
+      // Call the secure server-side function that handles:
+      // - Admin permission verification
+      // - Duplicate spin prevention
+      // - Cryptographically adequate random selection
+      // - Atomic updates to spin_results, fund_members, and funds tables
+      const { data, error } = await supabase
+        .rpc('conduct_spin', { p_fund_id: fundId });
 
-      if (spinError) throw spinError;
+      if (error) {
+        console.error('Spin error:', error);
+        throw new Error(error.message || 'Failed to conduct spin');
+      }
 
-      // Update member as winner
-      const { error: memberError } = await supabase
-        .from('fund_members')
-        .update({ has_won: true, won_month: spinData.month })
-        .eq('fund_id', fundId)
-        .eq('user_id', spinData.winner_id);
+      if (!data || data.length === 0) {
+        throw new Error('No winner returned from spin');
+      }
 
-      if (memberError) throw memberError;
-
-      // Increment current month
-      const { error: fundError } = await supabase
-        .from('funds')
-        .update({ current_month: (fund?.current_month || 1) + 1 })
-        .eq('id', fundId);
-
-      if (fundError) throw fundError;
+      return data[0];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fund', fundId] });
@@ -382,6 +370,7 @@ export const useFundDetails = (fundId: string) => {
     verifyMember: verifyMemberMutation.mutateAsync,
     submitPayment: submitPaymentMutation.mutateAsync,
     approvePayment: approvePaymentMutation.mutateAsync,
-    recordSpin: recordSpinMutation.mutateAsync,
+    conductSpin: conductSpinMutation.mutateAsync,
+    isSpinning: conductSpinMutation.isPending,
   };
 };

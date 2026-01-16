@@ -273,6 +273,15 @@ export type Database = {
       }
     }
     Functions: {
+      conduct_spin: {
+        Args: { p_fund_id: string }
+        Returns: {
+          amount: number
+          month: number
+          winner_id: string
+          winner_name: string
+        }[]
+      }
       generate_join_code: { Args: never; Returns: string }
       get_fund_by_join_code: {
         Args: { join_code_input: string }
